@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+data/predictions.db
+data/logo_b64.txt
+.env
+*.egg-info/
+dist/
+.DS_Store
