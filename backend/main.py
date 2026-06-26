@@ -172,6 +172,15 @@ def seed_db():
                 cur.execute("""INSERT INTO predictions (emp_id, round, match_name, prediction)
                                VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                             (emp_id, rnd, match, pred_val))
+            # Use pre-calculated points from Excel (source of truth)
+            r1_pts = float(info.get("r1_pts", 0) or 0)
+            r2_pts = float(info.get("r2_pts", 0) or 0)
+            r3_pts = float(info.get("r3_pts", 0) or 0)
+            cur.execute("""INSERT INTO points_cache (emp_id, r1_pts, r2_pts, r3_pts, total)
+                           VALUES (%s,%s,%s,%s,%s) ON CONFLICT (emp_id) DO UPDATE SET
+                           r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
+                           r3_pts=EXCLUDED.r3_pts, total=EXCLUDED.total""",
+                        (emp_id, r1_pts, r2_pts, r3_pts, r1_pts+r2_pts+r3_pts))
         for match, result in data["matches"]["R1"]:
             cur.execute("""INSERT INTO matches (round, match_name, result, status, played_at)
                            VALUES (%s,%s,%s,'done',%s) ON CONFLICT DO NOTHING""",
@@ -188,7 +197,6 @@ def seed_db():
             cur.execute("""INSERT INTO matches (round, match_name, status)
                            VALUES (%s,%s,'pending') ON CONFLICT DO NOTHING""",
                         (3, match))
-        recalc_all(db)
         print(f"Seeded {len(data['participants'])} participants.")
 
 @app.on_event("startup")
@@ -411,3 +419,13 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+
+@app.post("/api/admin/reset-and-reseed")
+def reset_reseed(_=Depends(require_admin)):
+    """Drop all data and reseed from JSON. Use when seed data is updated."""
+    with get_db() as db:
+        cur = db.cursor()
+        cur.execute("TRUNCATE TABLE points_cache, predictions, matches, participants RESTART IDENTITY CASCADE")
+    seed_db()
+    return {"status": "ok", "message": "Database reset and reseeded successfully"}
