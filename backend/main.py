@@ -368,12 +368,22 @@ async def submit_result(payload: MatchResult, _=Depends(require_admin)):
             raise HTTPException(404, "Match not found")
         db_run(conn, "UPDATE matches SET result=%s,status='done',played_at=%s WHERE round=%s AND match_name=%s",
                payload.result, datetime.utcnow().isoformat(), payload.round, payload.match_name)
-        recalc_all_points(conn)
     finally:
         conn.close()
-    await broadcaster.broadcast({"type":"update","match":payload.match_name,
+    await broadcaster.broadcast({"type":"match_saved","match":payload.match_name,
                                   "result":payload.result,"round":payload.round})
     return {"status":"ok","match":payload.match_name,"result":payload.result}
+
+@app.post("/api/admin/recalculate")
+async def recalculate(_=Depends(require_admin)):
+    conn = get_conn()
+    try:
+        recalc_all_points(conn)
+        count = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
+    finally:
+        conn.close()
+    await broadcaster.broadcast({"type":"update"})
+    return {"status":"ok","participants_recalculated":count}
 
 class BonusPoints(BaseModel):
     emp_id: str
