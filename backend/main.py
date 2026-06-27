@@ -176,8 +176,13 @@ def health():
     try:
         conn = get_conn()
         conn.run("SELECT 1")
+        try:
+            count = conn.run("SELECT COUNT(*) FROM participants")[0][0]
+            matches = conn.run("SELECT COUNT(*) FROM matches")[0][0]
+        except:
+            count, matches = 0, 0
         conn.close()
-        return {"status": "ok", "db": "connected"}
+        return {"status": "ok", "db": "connected", "participants": count, "matches": matches}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
@@ -373,27 +378,30 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
         conn.close()
 
 @app.post("/api/admin/reset-and-reseed")
-def reset_reseed(_=Depends(require_admin)):
-    try:
-        conn = get_conn()
+async def reset_reseed(_=Depends(require_admin)):
+    import threading
+    def do_reset():
         try:
-            conn.run("DROP TABLE IF EXISTS points_cache CASCADE")
-            conn.run("DROP TABLE IF EXISTS predictions CASCADE")
-            conn.run("DROP TABLE IF EXISTS matches CASCADE")
-            conn.run("DROP TABLE IF EXISTS participants CASCADE")
-        finally:
-            conn.close()
-        # Reinitialize
-        conn2 = get_conn()
-        try:
-            init_db(conn2)
-            seed_db(conn2)
-        finally:
-            conn2.close()
-        return {"status":"ok","message":"Reseeded successfully"}
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(500, str(e))
+            conn = get_conn()
+            try:
+                conn.run("DROP TABLE IF EXISTS points_cache CASCADE")
+                conn.run("DROP TABLE IF EXISTS predictions CASCADE")
+                conn.run("DROP TABLE IF EXISTS matches CASCADE")
+                conn.run("DROP TABLE IF EXISTS participants CASCADE")
+            finally:
+                conn.close()
+            conn2 = get_conn()
+            try:
+                init_db(conn2)
+                seed_db(conn2)
+                print("Reset and reseed complete!")
+            finally:
+                conn2.close()
+        except Exception as e:
+            traceback.print_exc()
+            print(f"Reset failed: {e}")
+    threading.Thread(target=do_reset, daemon=True).start()
+    return {"status":"ok","message":"Reset started in background — check /api/health in 30s"}
 
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
