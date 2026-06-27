@@ -31,7 +31,7 @@ broadcaster = EventBroadcaster()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await asyncio.to_thread(startup)
+    asyncio.create_task(asyncio.to_thread(startup))
     yield
 
 app = FastAPI(title="FIFA WC2026 Dashboard API", lifespan=lifespan)
