@@ -133,29 +133,54 @@ def seed_db(conn):
         data = json.load(f)
 
     match_options = data.get("match_options", {})
+    participants = data["participants"]
 
-    for emp_id, info in data["participants"].items():
-        safe_run(conn,
-            "INSERT INTO participants (emp_id,name,rounds) VALUES (:e,:n,:r) ON CONFLICT DO NOTHING",
-            e=emp_id, n=info["name"], r=json.dumps(info["rounds"]))
+    # ── Bulk insert participants ──────────────────────────
+    p_vals = [(eid, info["name"], json.dumps(info["rounds"]))
+              for eid, info in participants.items()]
+    if p_vals:
+        placeholders = ",".join(f"(${i*3+1},${i*3+2},${i*3+3})" for i in range(len(p_vals)))
+        flat = [v for row in p_vals for v in row]
+        conn.run(f"INSERT INTO participants (emp_id,name,rounds) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
+    print(f"Inserted {len(p_vals)} participants")
+
+    # ── Bulk insert points_cache ──────────────────────────
+    pc_vals = [(eid,) for eid in participants]
+    if pc_vals:
+        placeholders = ",".join(f"(${i+1},0,0,0,0,0)" for i in range(len(pc_vals)))
+        flat = [v for row in pc_vals for v in row]
+        conn.run(f"INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
+    print(f"Inserted {len(pc_vals)} points_cache rows")
+
+    # ── Bulk insert predictions (in chunks of 500) ────────
+    all_preds = []
+    for eid, info in participants.items():
         for pred_key, pred_val in info["predictions"].items():
             rnd_str, match = pred_key.split(":", 1)
-            rnd = int(rnd_str[1])
-            safe_run(conn,
-                "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (:e,:r,:m,:p) ON CONFLICT DO NOTHING",
-                e=emp_id, r=rnd, m=match, p=pred_val)
-        safe_run(conn,
-            "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,total) VALUES (:e,0,0,0,0) ON CONFLICT DO NOTHING",
-            e=emp_id)
+            all_preds.append((eid, int(rnd_str[1]), match, pred_val or ""))
 
+    chunk_size = 500
+    for i in range(0, len(all_preds), chunk_size):
+        chunk = all_preds[i:i+chunk_size]
+        placeholders = ",".join(f"(${j*4+1},${j*4+2},${j*4+3},${j*4+4})" for j in range(len(chunk)))
+        flat = [v for row in chunk for v in row]
+        conn.run(f"INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
+        print(f"Inserted predictions chunk {i//chunk_size+1} ({len(chunk)} rows)")
+
+    # ── Bulk insert matches ───────────────────────────────
+    match_rows = []
     for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
         for match in data["matches"][key]:
-            opts = match_options.get(f"{key}:{match}", [])
-            safe_run(conn,
-                "INSERT INTO matches (round,match_name,status,options) VALUES (:r,:m,'pending',:o) ON CONFLICT DO NOTHING",
-                r=rnd, m=match, o=json.dumps(opts, ensure_ascii=False))
+            opts = json.dumps(match_options.get(f"{key}:{match}", []), ensure_ascii=False)
+            match_rows.append((rnd, match, "pending", opts))
 
-    print(f"Seeded {len(data['participants'])} participants, all points = 0.")
+    if match_rows:
+        placeholders = ",".join(f"(${i*4+1},${i*4+2},${i*4+3},${i*4+4})" for i in range(len(match_rows)))
+        flat = [v for row in match_rows for v in row]
+        conn.run(f"INSERT INTO matches (round,match_name,status,options) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
+    print(f"Inserted {len(match_rows)} matches")
+
+    print(f"Seeding complete: {len(participants)} participants, {len(match_rows)} matches — all points = 0.")
 
 @app.on_event("startup")
 def startup():
