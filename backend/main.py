@@ -592,6 +592,20 @@ def rename_participant(payload: dict, _=Depends(require_admin)):
     finally:
         conn.close()
 
+@app.post("/api/admin/recalculate")
+def recalculate_points(_=Depends(require_admin)):
+    """Recalculate points for all participants based on current match results. Bonus points are preserved."""
+    try:
+        conn = get_conn()
+        try:
+            recalc_all_points(conn)
+        finally:
+            conn.close()
+        return {"status": "ok", "message": "Points recalculated for all participants"}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
