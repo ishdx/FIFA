@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
-import pg8000.native, json, os, secrets, asyncio
+from typing import Optional
+import pg8000.native, json, os, secrets, asyncio, urllib.parse
 from datetime import datetime
 
 # ── SSE broadcaster ───────────────────────────────────────
@@ -34,73 +35,75 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 ADMIN_USER   = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS   = os.environ.get("ADMIN_PASS", "smi2026")
-security     = HTTPBasic()
 
 # ── DB connection ─────────────────────────────────────────
-def parse_db_url(url):
-    """Parse postgresql://user:pass@host:port/dbname"""
-    import urllib.parse
-    r = urllib.parse.urlparse(url)
-    # urllib.parse automatically decodes percent-encoded characters
-    return {
-        "host": r.hostname,
-        "port": r.port or 5432,
-        "database": r.path.lstrip("/"),
-        "user": urllib.parse.unquote(r.username) if r.username else r.username,
-        "password": urllib.parse.unquote(r.password) if r.password else r.password,
-        "ssl_context": True,
-    }
-
 def get_conn():
-    params = parse_db_url(DATABASE_URL)
-    return pg8000.native.Connection(**params)
+    r = urllib.parse.urlparse(DATABASE_URL)
+    return pg8000.native.Connection(
+        host=r.hostname,
+        port=r.port or 5432,
+        database=r.path.lstrip("/"),
+        user=urllib.parse.unquote(r.username) if r.username else "",
+        password=urllib.parse.unquote(r.password) if r.password else "",
+        ssl_context=True,
+    )
 
-def run_query(sql, params=None, fetch=True):
-    conn = get_conn()
+# ── Auth — use custom header to avoid browser popup ──────
+def require_admin(x_admin_token: str = Header(default="")):
+    """
+    Clients send:  X-Admin-Token: base64(user:pass)
+    This avoids the browser's native Basic Auth popup.
+    """
+    import base64
     try:
-        if params:
-            result = conn.run(sql, *params)
-        else:
-            result = conn.run(sql)
-        if fetch:
-            return result
-        return None
-    finally:
-        conn.close()
+        decoded = base64.b64decode(x_admin_token).decode()
+        user, password = decoded.split(":", 1)
+        ok = secrets.compare_digest(user, ADMIN_USER) and \
+             secrets.compare_digest(password, ADMIN_PASS)
+        if ok:
+            return user
+    except Exception:
+        pass
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
-def require_admin(creds: HTTPBasicCredentials = Depends(security)):
-    ok = secrets.compare_digest(creds.username, ADMIN_USER) and \
-         secrets.compare_digest(creds.password, ADMIN_PASS)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Incorrect credentials",
-                            headers={"WWW-Authenticate": "Basic"})
-    return creds.username
-
+# ── Scoring ───────────────────────────────────────────────
 def check_pred(prediction: str, result: str) -> bool:
+    """Match prediction against result. Both are bilingual like 'فوز X | X Win' or 'تعادل | Draw'"""
+    if not prediction or not result:
+        return False
     p = prediction.lower()
     r = result.lower()
-    if "draw" in r or "تعادل" in r:
-        return "draw" in p or "تعادل" in p
-    team = r.replace(" win","").replace(" wins","").strip()
-    return team in p
+    # Extract English part after | if present
+    p_en = p.split("|")[-1].strip() if "|" in p else p
+    r_en = r.split("|")[-1].strip() if "|" in r else r
+    return p_en == r_en
 
-def recalc_points_db(conn, emp_id: str):
-    preds = conn.run("SELECT round, match_name, prediction FROM predictions WHERE emp_id=:e", e=emp_id)
-    results_rows = conn.run("SELECT round, match_name, result FROM matches WHERE status='done' AND result IS NOT NULL")
+def recalc_all_points(conn):
+    """Recalculate points for ALL participants based on current match results."""
+    results_rows = conn.run(
+        "SELECT round, match_name, result FROM matches WHERE status='done' AND result IS NOT NULL"
+    )
     results = {(r[0], r[1]): r[2] for r in results_rows}
-    pts = {1: 0.0, 2: 0.0, 3: 0.0}
-    for pr in preds:
-        key = (pr[0], pr[1])
-        if key in results and pr[2]:
-            if check_pred(pr[2], results[key]):
-                pts[pr[0]] += 3.0
-    conn.run("""INSERT INTO points_cache (emp_id, r1_pts, r2_pts, r3_pts, total)
-                VALUES (:e,:r1,:r2,:r3,:t)
-                ON CONFLICT (emp_id) DO UPDATE SET
-                r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
-                r3_pts=EXCLUDED.r3_pts, total=EXCLUDED.total""",
-             e=emp_id, r1=pts[1], r2=pts[2], r3=pts[3], t=pts[1]+pts[2]+pts[3])
+    all_ids = conn.run("SELECT emp_id FROM participants")
+    for (emp_id,) in all_ids:
+        preds = conn.run(
+            "SELECT round, match_name, prediction FROM predictions WHERE emp_id=:e", e=emp_id
+        )
+        pts = {1: 0.0, 2: 0.0, 3: 0.0}
+        for pr in preds:
+            key = (pr[0], pr[1])
+            if key in results and pr[2]:
+                if check_pred(pr[2], results[key]):
+                    pts[pr[0]] += 3.0
+        bonus = conn.run("SELECT bonus_pts FROM points_cache WHERE emp_id=:e", e=emp_id)
+        bonus_pts = float(bonus[0][0]) if bonus else 0.0
+        total = pts[1] + pts[2] + pts[3] + bonus_pts
+        conn.run("""INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total)
+                    VALUES (:e,:r1,:r2,:r3,:b,:t)
+                    ON CONFLICT (emp_id) DO UPDATE SET
+                    r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
+                    r3_pts=EXCLUDED.r3_pts, total=EXCLUDED.total""",
+                 e=emp_id, r1=pts[1], r2=pts[2], r3=pts[3], b=bonus_pts, t=total)
 
 # ── DB init & seed ────────────────────────────────────────
 @app.on_event("startup")
@@ -115,14 +118,22 @@ def startup():
         conn.run("""CREATE TABLE IF NOT EXISTS matches (
             id SERIAL PRIMARY KEY, round INTEGER NOT NULL, match_name TEXT NOT NULL,
             result TEXT, status TEXT DEFAULT 'pending', played_at TEXT,
+            options TEXT DEFAULT '[]',
             UNIQUE(round, match_name))""")
         conn.run("""CREATE TABLE IF NOT EXISTS points_cache (
-            emp_id TEXT PRIMARY KEY, r1_pts REAL DEFAULT 0,
-            r2_pts REAL DEFAULT 0, r3_pts REAL DEFAULT 0, total REAL DEFAULT 0)""")
+            emp_id TEXT PRIMARY KEY,
+            r1_pts REAL DEFAULT 0, r2_pts REAL DEFAULT 0,
+            r3_pts REAL DEFAULT 0, bonus_pts REAL DEFAULT 0,
+            total REAL DEFAULT 0)""")
+        # Add bonus_pts column if upgrading from old schema
+        try:
+            conn.run("ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS bonus_pts REAL DEFAULT 0")
+        except Exception:
+            pass
 
         count = conn.run("SELECT COUNT(*) FROM participants")[0][0]
         if count > 0:
-            return
+            return  # already seeded
 
         seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "seed_data.json")
         if not os.path.exists(seed_path):
@@ -130,6 +141,7 @@ def startup():
         with open(seed_path, encoding="utf-8") as f:
             data = json.load(f)
 
+        # Insert participants & predictions (all points = 0)
         for emp_id, info in data["participants"].items():
             conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES (:e,:n,:r) ON CONFLICT DO NOTHING",
                      e=emp_id, n=info["name"], r=json.dumps(info["rounds"]))
@@ -138,28 +150,18 @@ def startup():
                 rnd = int(rnd_str[1])
                 conn.run("INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (:e,:r,:m,:p) ON CONFLICT DO NOTHING",
                          e=emp_id, r=rnd, m=match, p=pred_val)
-            r1p = float(info.get("r1_pts", 0) or 0)
-            r2p = float(info.get("r2_pts", 0) or 0)
-            r3p = float(info.get("r3_pts", 0) or 0)
-            conn.run("""INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,total)
-                        VALUES (:e,:r1,:r2,:r3,:t) ON CONFLICT (emp_id) DO UPDATE SET
-                        r1_pts=EXCLUDED.r1_pts,r2_pts=EXCLUDED.r2_pts,
-                        r3_pts=EXCLUDED.r3_pts,total=EXCLUDED.total""",
-                     e=emp_id, r1=r1p, r2=r2p, r3=r3p, t=r1p+r2p+r3p)
+            conn.run("""INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total)
+                        VALUES (:e,0,0,0,0,0) ON CONFLICT DO NOTHING""", e=emp_id)
 
-        for match, result in data["matches"]["R1"]:
-            conn.run("INSERT INTO matches (round,match_name,result,status,played_at) VALUES (1,:m,:r,'done','2026-06-01') ON CONFLICT DO NOTHING",
-                     m=match, r=result)
-        for match, result in data["matches"]["R2"]:
-            conn.run("INSERT INTO matches (round,match_name,result,status,played_at) VALUES (2,:m,:r,'done','2026-06-15') ON CONFLICT DO NOTHING",
-                     m=match, r=result)
-        for match, result in data["matches"]["R3_scored"]:
-            conn.run("INSERT INTO matches (round,match_name,result,status,played_at) VALUES (3,:m,:r,'done','2026-06-25') ON CONFLICT DO NOTHING",
-                     m=match, r=result)
-        for match in data["matches"]["R3_pending"]:
-            conn.run("INSERT INTO matches (round,match_name,status) VALUES (3,:m,'pending') ON CONFLICT DO NOTHING", m=match)
+        # Insert matches with options (all pending)
+        match_options = data.get("match_options", {})
+        for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
+            for match in data["matches"][key]:
+                opts = match_options.get(f"{key}:{match}", [])
+                conn.run("INSERT INTO matches (round,match_name,status,options) VALUES (:r,:m,'pending',:o) ON CONFLICT DO NOTHING",
+                         r=rnd, m=match, o=json.dumps(opts, ensure_ascii=False))
 
-        print(f"Seeded {len(data['participants'])} participants.")
+        print(f"Seeded {len(data['participants'])} participants, all points = 0.")
     finally:
         conn.close()
 
@@ -168,25 +170,24 @@ def startup():
 def get_stats():
     conn = get_conn()
     try:
-        total  = conn.run("SELECT COUNT(*) FROM participants")[0][0]
-        r1c    = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=1")[0][0]
-        r2c    = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2")[0][0]
-        r3c    = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3")[0][0]
-        all3   = conn.run("SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)=3) x")[0][0]
-        top    = conn.run("SELECT emp_id,r1_pts,r2_pts,r3_pts,total FROM points_cache ORDER BY total DESC LIMIT 1")
-        avg    = conn.run("SELECT AVG(total),AVG(r1_pts),AVG(r2_pts),AVG(r3_pts) FROM points_cache")[0]
-        mn     = conn.run("SELECT MIN(total) FROM points_cache")[0][0]
-        done   = conn.run("SELECT COUNT(*) FROM matches WHERE status='done'")[0][0]
-        pending= conn.run("SELECT COUNT(*) FROM matches WHERE status='pending'")[0][0]
+        total   = conn.run("SELECT COUNT(*) FROM participants")[0][0]
+        r1c     = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=1")[0][0]
+        r2c     = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2")[0][0]
+        r3c     = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3")[0][0]
+        all3    = conn.run("SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)=3) x")[0][0]
+        top     = conn.run("SELECT emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total FROM points_cache ORDER BY total DESC LIMIT 1")
+        avg     = conn.run("SELECT AVG(total),AVG(r1_pts),AVG(r2_pts),AVG(r3_pts) FROM points_cache")[0]
+        mn      = conn.run("SELECT MIN(total) FROM points_cache")[0][0]
+        done    = conn.run("SELECT COUNT(*) FROM matches WHERE status='done'")[0][0]
+        pending = conn.run("SELECT COUNT(*) FROM matches WHERE status='pending'")[0][0]
 
         leader_name = ""
+        top_data = {"name":"","total":0,"r1":0,"r2":0,"r3":0,"bonus":0}
         if top:
             t = top[0]
             p = conn.run("SELECT name FROM participants WHERE emp_id=:e", e=t[0])
             leader_name = p[0][0] if p else ""
-            top_data = {"name": leader_name, "total": float(t[4]), "r1": float(t[1]), "r2": float(t[2]), "r3": float(t[3])}
-        else:
-            top_data = {"name": "", "total": 0, "r1": 0, "r2": 0, "r3": 0}
+            top_data = {"name":leader_name,"total":float(t[5]),"r1":float(t[1]),"r2":float(t[2]),"r3":float(t[3]),"bonus":float(t[4])}
 
         combos = {}
         for k, q in [
@@ -222,20 +223,21 @@ def get_stats():
 def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter: str="all"):
     conn = get_conn()
     try:
-        rows = conn.run("""SELECT pc.emp_id,p.name,pc.r1_pts,pc.r2_pts,pc.r3_pts,pc.total,p.rounds
+        rows = conn.run("""SELECT pc.emp_id,p.name,pc.r1_pts,pc.r2_pts,pc.r3_pts,pc.bonus_pts,pc.total,p.rounds
                            FROM points_cache pc JOIN participants p ON pc.emp_id=p.emp_id
                            ORDER BY pc.total DESC, p.name ASC""")
         results, rank, prev_total = [], 0, None
         for r in rows:
-            rounds = json.loads(r[6])
+            rounds = json.loads(r[7])
             if round_filter=="r1" and 1 not in rounds: continue
             if round_filter=="r2" and 2 not in rounds: continue
             if round_filter=="r3" and 3 not in rounds: continue
             if round_filter=="all3" and not all(x in rounds for x in [1,2,3]): continue
             if search and search.lower() not in r[1].lower() and search not in r[0]: continue
-            if r[5]!=prev_total: rank=len(results)+1; prev_total=r[5]
+            if r[6]!=prev_total: rank=len(results)+1; prev_total=r[6]
             results.append({"rank":rank,"emp_id":r[0],"name":r[1],
-                            "r1":float(r[2]),"r2":float(r[3]),"r3":float(r[4]),"total":float(r[5]),
+                            "r1":float(r[2]),"r2":float(r[3]),"r3":float(r[4]),
+                            "bonus":float(r[5]),"total":float(r[6]),
                             "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds})
         start=(page-1)*per_page
         return {"data":results[start:start+per_page],"total":len(results),"page":page,"per_page":per_page}
@@ -246,8 +248,9 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
 def get_matches():
     conn = get_conn()
     try:
-        rows = conn.run("SELECT id,round,match_name,result,status,played_at FROM matches ORDER BY round,id")
-        return [{"id":r[0],"round":r[1],"match_name":r[2],"result":r[3],"status":r[4],"played_at":r[5]} for r in rows]
+        rows = conn.run("SELECT id,round,match_name,result,status,played_at,options FROM matches ORDER BY round,id")
+        return [{"id":r[0],"round":r[1],"match_name":r[2],"result":r[3],
+                 "status":r[4],"played_at":r[5],"options":json.loads(r[6] or "[]")} for r in rows]
     finally:
         conn.close()
 
@@ -270,53 +273,60 @@ async def sse_events(request: Request):
                              headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
 
 # ── ADMIN ENDPOINTS ───────────────────────────────────────
+@app.get("/api/admin/verify")
+def verify_admin(_=Depends(require_admin)):
+    return {"status": "ok"}
+
 class MatchResult(BaseModel):
     round: int
     match_name: str
-    result: str
+    result: str  # exact option string e.g. "فوز البرازيل | Brazil Win"
 
 @app.post("/api/admin/result")
 async def submit_result(payload: MatchResult, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        ex = conn.run("SELECT id FROM matches WHERE round=:r AND match_name=:m", r=payload.round, m=payload.match_name)
+        ex = conn.run("SELECT id FROM matches WHERE round=:r AND match_name=:m",
+                      r=payload.round, m=payload.match_name)
         if not ex:
-            raise HTTPException(404, f"Match not found")
-        conn.run("UPDATE matches SET result=:res,status='done',played_at=:t WHERE round=:r AND match_name=:m",
-                 res=payload.result, t=datetime.utcnow().isoformat(), r=payload.round, m=payload.match_name)
-        participants = conn.run("SELECT DISTINCT emp_id FROM predictions WHERE round=:r", r=payload.round)
-        for p in participants:
-            recalc_points_db(conn, p[0])
+            raise HTTPException(404, "Match not found")
+        conn.run("UPDATE matches SET result=:res, status='done', played_at=:t WHERE round=:r AND match_name=:m",
+                 res=payload.result, t=datetime.utcnow().isoformat(),
+                 r=payload.round, m=payload.match_name)
+        recalc_all_points(conn)
     finally:
         conn.close()
-    await broadcaster.broadcast({"type":"update","match":payload.match_name,"result":payload.result,"round":payload.round})
-    return {"status":"ok","match":payload.match_name,"result":payload.result,"updated":len(participants)}
+    await broadcaster.broadcast({"type":"update","match":payload.match_name,
+                                  "result":payload.result,"round":payload.round})
+    return {"status":"ok","match":payload.match_name,"result":payload.result}
 
-@app.post("/api/admin/result/batch")
-async def submit_results_batch(results: list[MatchResult], _=Depends(require_admin)):
-    updated = []
+class BonusPoints(BaseModel):
+    emp_id: str
+    bonus_pts: float
+
+@app.post("/api/admin/bonus")
+async def set_bonus(payload: BonusPoints, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        for payload in results:
-            ex = conn.run("SELECT id FROM matches WHERE round=:r AND match_name=:m", r=payload.round, m=payload.match_name)
-            if not ex: continue
-            conn.run("UPDATE matches SET result=:res,status='done',played_at=:t WHERE round=:r AND match_name=:m",
-                     res=payload.result, t=datetime.utcnow().isoformat(), r=payload.round, m=payload.match_name)
-            updated.append(payload.match_name)
-        all_ids = conn.run("SELECT emp_id FROM participants")
-        for p in all_ids:
-            recalc_points_db(conn, p[0])
+        ex = conn.run("SELECT emp_id FROM participants WHERE emp_id=:e", e=payload.emp_id)
+        if not ex:
+            raise HTTPException(404, "Participant not found")
+        # Update bonus then recalc total
+        conn.run("""UPDATE points_cache SET bonus_pts=:b,
+                    total=r1_pts+r2_pts+r3_pts+:b WHERE emp_id=:e""",
+                 b=payload.bonus_pts, e=payload.emp_id)
     finally:
         conn.close()
-    await broadcaster.broadcast({"type":"update","updated":updated})
-    return {"status":"ok","updated":updated}
+    await broadcaster.broadcast({"type":"update","bonus":True})
+    return {"status":"ok","emp_id":payload.emp_id,"bonus_pts":payload.bonus_pts}
 
 @app.get("/api/admin/matches/pending")
 def get_pending(_=Depends(require_admin)):
     conn = get_conn()
     try:
-        rows = conn.run("SELECT id,round,match_name,result,status,played_at FROM matches WHERE status='pending' ORDER BY round,id")
-        return [{"id":r[0],"round":r[1],"match_name":r[2],"result":r[3],"status":r[4],"played_at":r[5]} for r in rows]
+        rows = conn.run("SELECT id,round,match_name,result,status,options FROM matches WHERE status='pending' ORDER BY round,id")
+        return [{"id":r[0],"round":r[1],"match_name":r[2],"result":r[3],
+                 "status":r[4],"options":json.loads(r[5] or "[]")} for r in rows]
     finally:
         conn.close()
 
@@ -327,20 +337,20 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
         p = conn.run("SELECT emp_id,name,rounds FROM participants WHERE emp_id=:e", e=emp_id)
         if not p: raise HTTPException(404,"Participant not found")
         preds = conn.run("SELECT round,match_name,prediction FROM predictions WHERE emp_id=:e ORDER BY round", e=emp_id)
-        pts = conn.run("SELECT r1_pts,r2_pts,r3_pts,total FROM points_cache WHERE emp_id=:e", e=emp_id)
+        pts = conn.run("SELECT r1_pts,r2_pts,r3_pts,bonus_pts,total FROM points_cache WHERE emp_id=:e", e=emp_id)
         match_res = conn.run("SELECT round,match_name,result FROM matches WHERE status='done'")
         mr = {(r[0],r[1]):r[2] for r in match_res}
         pred_detail = []
         for pr in preds:
             res = mr.get((pr[0],pr[1]))
-            correct = check_pred(pr[2],res) if res else None
-            pred_detail.append({"round":pr[0],"match":pr[1],"prediction":pr[2],"result":res,
-                                 "correct":correct,"points":3 if correct else 0})
-        pts_row = pts[0] if pts else (0,0,0,0)
+            correct = check_pred(pr[2], res) if res else None
+            pred_detail.append({"round":pr[0],"match":pr[1],"prediction":pr[2],
+                                 "result":res,"correct":correct,"points":3 if correct else 0})
+        pts_row = pts[0] if pts else (0,0,0,0,0)
         return {"emp_id":emp_id,"name":p[0][1],"rounds":json.loads(p[0][2]),
                 "r1_pts":float(pts_row[0]),"r2_pts":float(pts_row[1]),
-                "r3_pts":float(pts_row[2]),"total":float(pts_row[3]),
-                "predictions":pred_detail}
+                "r3_pts":float(pts_row[2]),"bonus_pts":float(pts_row[3]),
+                "total":float(pts_row[4]),"predictions":pred_detail}
     finally:
         conn.close()
 
@@ -348,11 +358,11 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
 def reset_reseed(_=Depends(require_admin)):
     conn = get_conn()
     try:
-        conn.run("TRUNCATE TABLE points_cache, predictions, matches, participants RESTART IDENTITY CASCADE")
+        conn.run("TRUNCATE TABLE points_cache,predictions,matches,participants RESTART IDENTITY CASCADE")
     finally:
         conn.close()
     startup()
-    return {"status":"ok","message":"Database reset and reseeded successfully"}
+    return {"status":"ok","message":"Reseeded successfully"}
 
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
