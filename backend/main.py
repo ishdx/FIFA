@@ -55,7 +55,7 @@ def get_conn():
 
 def safe_run(conn, sql, *args):
     try:
-        return conn.run(sql, *args)
+        return conn.run(sql, list(args) if args else None)
     except Exception as e:
         print(f"SQL error: {e}\nSQL: {sql}")
         return []
@@ -149,13 +149,13 @@ def seed_db(conn):
         # participants
         for eid, info in participants.items():
             conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
-                     eid, info["name"], json.dumps(info["rounds"]))
+                     [eid, info["name"], json.dumps(info["rounds"])])
 
         print("  participants done")
 
         # points_cache
         for eid in participants:
-            conn.run("INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES ($1,0,0,0,0,0) ON CONFLICT DO NOTHING", eid)
+            conn.run("INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES ($1,0,0,0,0,0) ON CONFLICT DO NOTHING", [eid])
 
         print("  points_cache done")
 
@@ -165,7 +165,7 @@ def seed_db(conn):
             for pred_key, pred_val in info["predictions"].items():
                 rnd_str, match = pred_key.split(":", 1)
                 conn.run("INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
-                         eid, int(rnd_str[1]), match, pred_val or "")
+                         [eid, int(rnd_str[1]), match, pred_val or ""])
                 pred_count += 1
 
         print(f"  predictions done: {pred_count}")
@@ -175,7 +175,7 @@ def seed_db(conn):
             for match in data["matches"][key]:
                 opts = json.dumps(match_options.get(f"{key}:{match}", []), ensure_ascii=False)
                 conn.run("INSERT INTO matches (round,match_name,status,options) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
-                         rnd, match, "pending", opts)
+                         [rnd, match, "pending", opts])
 
         print("  matches done")
         conn.run("COMMIT")
@@ -340,12 +340,12 @@ async def submit_result(payload: MatchResult, _=Depends(require_admin)):
     conn = get_conn()
     try:
         ex = conn.run("SELECT id FROM matches WHERE round=$1 AND match_name=$2",
-                      payload.round, payload.match_name)
+                      [payload.round, payload.match_name])
         if not ex:
             raise HTTPException(404, "Match not found")
         conn.run("UPDATE matches SET result=$1,status='done',played_at=$2 WHERE round=$3 AND match_name=$4",
-                 payload.result, datetime.utcnow().isoformat(),
-                 payload.round, payload.match_name)
+                 [payload.result, datetime.utcnow().isoformat(),
+                  payload.round, payload.match_name])
         recalc_all_points(conn)
     finally:
         conn.close()
@@ -361,12 +361,12 @@ class BonusPoints(BaseModel):
 async def set_bonus(payload: BonusPoints, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        ex = conn.run("SELECT emp_id FROM participants WHERE emp_id=$1", payload.emp_id)
+        ex = conn.run("SELECT emp_id FROM participants WHERE emp_id=$1", [payload.emp_id])
         if not ex:
             raise HTTPException(404, "Participant not found")
         conn.run("""UPDATE points_cache SET bonus_pts=$1,
                     total=r1_pts+r2_pts+r3_pts+$1 WHERE emp_id=$2""",
-                 payload.bonus_pts, payload.emp_id)
+                 [payload.bonus_pts, payload.emp_id])
     finally:
         conn.close()
     await broadcaster.broadcast({"type":"update","bonus":True})
@@ -386,10 +386,10 @@ def get_pending(_=Depends(require_admin)):
 def get_participant_detail(emp_id: str, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        p = conn.run("SELECT emp_id,name,rounds FROM participants WHERE emp_id=$1", emp_id)
+        p = conn.run("SELECT emp_id,name,rounds FROM participants WHERE emp_id=$1", [emp_id])
         if not p: raise HTTPException(404,"Participant not found")
-        preds = conn.run("SELECT round,match_name,prediction FROM predictions WHERE emp_id=$1 ORDER BY round", emp_id)
-        pts = conn.run("SELECT r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=$1", emp_id)
+        preds = conn.run("SELECT round,match_name,prediction FROM predictions WHERE emp_id=$1 ORDER BY round", [emp_id])
+        pts = conn.run("SELECT r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=$1", [emp_id])
         match_res = conn.run("SELECT round,match_name,result FROM matches WHERE status='done'")
         mr = {(r[0],r[1]):r[2] for r in match_res}
         pred_detail = []
@@ -460,7 +460,7 @@ def test_seed(_=Depends(require_admin)):
             # Test single participant insert
             first_id, first_info = next(iter(participants.items()))
             conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
-                     first_id, first_info["name"], json.dumps(first_info["rounds"]))
+                     [first_id, first_info["name"], json.dumps(first_info["rounds"])])
             check = conn.run("SELECT COUNT(*) FROM participants")[0][0]
             
             return {
