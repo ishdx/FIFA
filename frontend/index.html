@@ -111,7 +111,7 @@ tr:hover td{background:var(--surface2)}
 <body>
 <div class="wrapper">
 <div class="header">
-  <img src="/logo.jpg" alt="SMI ميكانيكية" style="height:52px;width:auto;object-fit:contain;background:#fff;border-radius:7px;padding:5px 12px;display:block;">
+  <img src="/logo.jpg" alt="SMI" style="height:52px;width:140px;object-fit:contain;flex-shrink:0;border-radius:8px;background:#ffffff;padding:5px 10px;box-sizing:border-box;">
   <div class="hdiv"></div>
   <div class="htxt">
     <h1>مسابقة دوري التوقعات</h1>
@@ -194,7 +194,7 @@ let page = 1, maxPts = 1;
 let distChart, roundChart, partChart;
 
 document.getElementById('hdr-date').textContent =
-  'آخر تحديث: ' + new Date().toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric'});
+  'آخر تحديث: ' + new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'});
 
 async function loadStats() {
   const res = await fetch(API + '/api/stats');
