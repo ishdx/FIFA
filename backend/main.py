@@ -134,53 +134,51 @@ def seed_db(conn):
 
     match_options = data.get("match_options", {})
     participants = data["participants"]
-
     print(f"Seeding {len(participants)} participants...")
 
-    # ── Participants & points_cache (one statement each, all rows) ──
-    p_rows = [(eid, info["name"], json.dumps(info["rounds"]))
-               for eid, info in participants.items()]
+    # pg8000 max 4 positional args per run() call
+    # Use loop inside single transaction for speed
+    conn.run("BEGIN")
+    try:
+        # participants
+        for eid, info in participants.items():
+            conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+                     eid, info["name"], json.dumps(info["rounds"]))
 
-    # Build single multi-row INSERT for participants
-    ph = ",".join(f"(${i*3+1},${i*3+2},${i*3+3})" for i in range(len(p_rows)))
-    flat = [v for row in p_rows for v in row]
-    conn.run(f"INSERT INTO participants (emp_id,name,rounds) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
-    print(f"  participants done: {len(p_rows)}")
+        print("  participants done")
 
-    # points_cache
-    ph2 = ",".join(f"(${i+1},0,0,0,0,0)" for i in range(len(p_rows)))
-    flat2 = [row[0] for row in p_rows]
-    conn.run(f"INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES {ph2} ON CONFLICT DO NOTHING", *flat2)
-    print(f"  points_cache done")
+        # points_cache
+        for eid in participants:
+            conn.run("INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES ($1,0,0,0,0,0) ON CONFLICT DO NOTHING", eid)
 
-    # ── Predictions in chunks of 200 ─────────────────────
-    all_preds = []
-    for eid, info in participants.items():
-        for pred_key, pred_val in info["predictions"].items():
-            rnd_str, match = pred_key.split(":", 1)
-            all_preds.append((eid, int(rnd_str[1]), match, pred_val or ""))
+        print("  points_cache done")
 
-    chunk = 200
-    for i in range(0, len(all_preds), chunk):
-        c = all_preds[i:i+chunk]
-        ph = ",".join(f"(${j*4+1},${j*4+2},${j*4+3},${j*4+4})" for j in range(len(c)))
-        flat = [v for row in c for v in row]
-        conn.run(f"INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
-    print(f"  predictions done: {len(all_preds)}")
+        # predictions
+        pred_count = 0
+        for eid, info in participants.items():
+            for pred_key, pred_val in info["predictions"].items():
+                rnd_str, match = pred_key.split(":", 1)
+                conn.run("INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+                         eid, int(rnd_str[1]), match, pred_val or "")
+                pred_count += 1
 
-    # ── Matches ───────────────────────────────────────────
-    match_rows = []
-    for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
-        for match in data["matches"][key]:
-            opts = json.dumps(match_options.get(f"{key}:{match}", []), ensure_ascii=False)
-            match_rows.append((rnd, match, "pending", opts))
+        print(f"  predictions done: {pred_count}")
 
-    ph = ",".join(f"(${i*4+1},${i*4+2},${i*4+3},${i*4+4})" for i in range(len(match_rows)))
-    flat = [v for row in match_rows for v in row]
-    conn.run(f"INSERT INTO matches (round,match_name,status,options) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
-    print(f"  matches done: {len(match_rows)}")
+        # matches
+        for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
+            for match in data["matches"][key]:
+                opts = json.dumps(match_options.get(f"{key}:{match}", []), ensure_ascii=False)
+                conn.run("INSERT INTO matches (round,match_name,status,options) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+                         rnd, match, "pending", opts)
 
-    print(f"Seeding complete!")
+        print("  matches done")
+        conn.run("COMMIT")
+        print(f"Seeding complete: {len(participants)} participants!")
+
+    except Exception as e:
+        conn.run("ROLLBACK")
+        print(f"Seed failed, rolled back: {e}")
+        raise
 
 
 def startup():
@@ -453,11 +451,10 @@ def test_seed(_=Depends(require_admin)):
             participants = data["participants"]
             match_options = data.get("match_options", {})
             
-            # Test single participant insert first
+            # Test single participant insert
             first_id, first_info = next(iter(participants.items()))
             conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
                      first_id, first_info["name"], json.dumps(first_info["rounds"]))
-            
             check = conn.run("SELECT COUNT(*) FROM participants")[0][0]
             
             return {
