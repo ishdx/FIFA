@@ -144,6 +144,17 @@ def init_db(conn):
     safe_run(conn, "ALTER TABLE matches ADD COLUMN IF NOT EXISTS options TEXT DEFAULT '[]'")
 
 # ── Seed ─────────────────────────────────────────────────
+def _batch_insert(conn, table, cols, rows_of_vals, batch=200):
+    """INSERT rows in batches using multi-row VALUES — one round-trip per batch."""
+    col_str = f"({','.join(cols)})"
+    for i in range(0, len(rows_of_vals), batch):
+        chunk = rows_of_vals[i:i+batch]
+        vals  = ",".join(
+            "(" + ",".join(_esc(v) for v in row) + ")"
+            for row in chunk
+        )
+        db_run(conn, f"INSERT INTO {table} {col_str} VALUES {vals} ON CONFLICT DO NOTHING")
+
 def seed_db(conn):
     count = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
     if count > 0:
@@ -159,46 +170,39 @@ def seed_db(conn):
         data = json.load(f)
 
     match_options = data.get("match_options", {})
-    participants = data["participants"]
+    participants  = data["participants"]
     print(f"Seeding {len(participants)} participants...")
 
     db_run(conn, "BEGIN")
     try:
-        for eid, info in participants.items():
-            db_run(conn,
-                "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                eid, info["name"], json.dumps(info["rounds"]))
-
+        _batch_insert(conn, "participants", ["emp_id","name","rounds"],
+            [(eid, info["name"], json.dumps(info["rounds"]))
+             for eid, info in participants.items()])
         print("  participants done")
 
-        for eid in participants:
-            db_run(conn,
-                "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES (%s,0,0,0,0,0) ON CONFLICT DO NOTHING",
-                eid)
-
+        _batch_insert(conn, "points_cache",
+            ["emp_id","r1_pts","r2_pts","r3_pts","bonus_pts","total"],
+            [(eid, 0, 0, 0, 0, 0) for eid in participants])
         print("  points_cache done")
 
-        pred_count = 0
+        preds = []
         for eid, info in participants.items():
             for pred_key, pred_val in info["predictions"].items():
                 rnd_str, mname = pred_key.split(":", 1)
-                db_run(conn,
-                    "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                    eid, int(rnd_str[1]), mname, pred_val or "")
-                pred_count += 1
+                preds.append((eid, int(rnd_str[1]), mname, pred_val or ""))
+        _batch_insert(conn, "predictions", ["emp_id","round","match_name","prediction"], preds)
+        print(f"  predictions done: {len(preds)}")
 
-        print(f"  predictions done: {pred_count}")
-
+        matches = []
         for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
             for mname in data["matches"][key]:
                 opts = json.dumps(match_options.get(f"{key}:{mname}", []), ensure_ascii=False)
-                db_run(conn,
-                    "INSERT INTO matches (round,match_name,status,options) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                    rnd, mname, "pending", opts)
-
+                matches.append((rnd, mname, "pending", opts))
+        _batch_insert(conn, "matches", ["round","match_name","status","options"], matches)
         print("  matches done")
+
         db_run(conn, "COMMIT")
-        print(f"Seeding complete: {len(participants)} participants!")
+        print(f"Seeding complete: {len(participants)} participants, {len(preds)} predictions!")
 
     except Exception as e:
         db_run(conn, "ROLLBACK")
@@ -425,68 +429,48 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
         conn.close()
 
 @app.post("/api/admin/reset-and-reseed")
-async def reset_reseed(_=Depends(require_admin)):
-    import threading
-    def do_reset():
+def reset_reseed(_=Depends(require_admin)):
+    try:
+        conn = get_conn()
         try:
             print("Dropping tables...")
-            conn = get_conn()
-            try:
-                db_run(conn, "DROP TABLE IF EXISTS points_cache CASCADE")
-                db_run(conn, "DROP TABLE IF EXISTS predictions CASCADE")
-                db_run(conn, "DROP TABLE IF EXISTS matches CASCADE")
-                db_run(conn, "DROP TABLE IF EXISTS participants CASCADE")
-                print("Tables dropped.")
-            finally:
-                conn.close()
-            print("Re-initializing...")
-            conn2 = get_conn()
-            try:
-                init_db(conn2)
-                print("Tables created, seeding...")
-                seed_db(conn2)
-                print("Reset and reseed complete!")
-            finally:
-                conn2.close()
-        except Exception as e:
-            traceback.print_exc()
-            print(f"RESET FAILED: {e}")
-    threading.Thread(target=do_reset, daemon=True).start()
-    return {"status":"ok","message":"Reset started in background — check /api/health in 30s"}
+            db_run(conn, "DROP TABLE IF EXISTS points_cache CASCADE")
+            db_run(conn, "DROP TABLE IF EXISTS predictions CASCADE")
+            db_run(conn, "DROP TABLE IF EXISTS matches CASCADE")
+            db_run(conn, "DROP TABLE IF EXISTS participants CASCADE")
+            print("Tables dropped.")
+            init_db(conn)
+            print("Tables created, seeding...")
+            seed_db(conn)
+            count = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
+            matches = db_run(conn, "SELECT COUNT(*) FROM matches")[0][0]
+            print(f"Done: {count} participants, {matches} matches.")
+            return {"status":"ok","participants":count,"matches":matches}
+        finally:
+            conn.close()
+    except Exception as e:
+        traceback.print_exc()
+        return {"status":"error","detail":str(e)}
 
 @app.get("/api/admin/test-seed")
 def test_seed(_=Depends(require_admin)):
     try:
         conn = get_conn()
         try:
-            db_run(conn, "DROP TABLE IF EXISTS points_cache CASCADE")
-            db_run(conn, "DROP TABLE IF EXISTS predictions CASCADE")
-            db_run(conn, "DROP TABLE IF EXISTS matches CASCADE")
-            db_run(conn, "DROP TABLE IF EXISTS participants CASCADE")
-            init_db(conn)
-
             seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "seed_data.json")
             with open(seed_path, encoding="utf-8") as f:
                 data = json.load(f)
-
             participants = data["participants"]
             match_options = data.get("match_options", {})
-
-            first_id, first_info = next(iter(participants.items()))
-            db_run(conn,
-                "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                first_id, first_info["name"], json.dumps(first_info["rounds"]))
-            check = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
-
+            preds_count = sum(len(info["predictions"]) for info in participants.values())
+            db_check = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
             return {
                 "status": "ok",
-                "participants_in_seed": len(participants),
-                "matches_r1": len(data["matches"]["R1"]),
-                "matches_r2": len(data["matches"]["R2"]),
-                "matches_r3": len(data["matches"]["R3"]),
+                "seed_participants": len(participants),
+                "seed_predictions": preds_count,
+                "seed_matches": sum(len(data["matches"][k]) for k in ("R1","R2","R3")),
                 "match_options_count": len(match_options),
-                "test_insert_worked": check == 1,
-                "first_participant": first_id,
+                "db_participants_now": db_check,
             }
         finally:
             conn.close()
