@@ -488,6 +488,111 @@ def test_seed(_=Depends(require_admin)):
         traceback.print_exc()
         return {"status": "error", "detail": str(e)}
 
+
+@app.post("/api/admin/merge-participant")
+def merge_participant(payload: dict, _=Depends(require_admin)):
+    """Merge wrong_id into correct_id. Preserves all match results and bonus points."""
+    wrong_id  = str(payload.get("wrong_id",  "")).strip()
+    correct_id = str(payload.get("correct_id", "")).strip()
+    if not wrong_id or not correct_id:
+        raise HTTPException(400, "wrong_id and correct_id are required")
+    if wrong_id == correct_id:
+        raise HTTPException(400, "IDs are the same")
+
+    conn = get_conn()
+    try:
+        w = db_run(conn, "SELECT emp_id,name FROM participants WHERE emp_id=%s", wrong_id)
+        c = db_run(conn, "SELECT emp_id,name FROM participants WHERE emp_id=%s", correct_id)
+        if not w: raise HTTPException(404, f"wrong_id {wrong_id} not found")
+        if not c: raise HTTPException(404, f"correct_id {correct_id} not found")
+
+        wrong_name   = w[0][1]
+        correct_name = c[0][1]
+
+        # Move predictions not already covered by correct_id
+        wrong_preds = db_run(conn,
+            "SELECT round,match_name,prediction FROM predictions WHERE emp_id=%s", wrong_id)
+        existing = set(
+            (r[0], r[1]) for r in db_run(conn,
+                "SELECT round,match_name FROM predictions WHERE emp_id=%s", correct_id))
+        moved = 0
+        for rnd, match, pred in wrong_preds:
+            if (rnd, match) not in existing:
+                safe_run(conn,
+                    "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
+                    correct_id, rnd, match, pred)
+                moved += 1
+
+        # Merge rounds list
+        wr = db_run(conn, "SELECT rounds FROM participants WHERE emp_id=%s", wrong_id)
+        cr = db_run(conn, "SELECT rounds FROM participants WHERE emp_id=%s", correct_id)
+        w_rounds = json.loads(wr[0][0]) if wr else []
+        c_rounds = json.loads(cr[0][0]) if cr else []
+        merged = sorted(set(w_rounds + c_rounds))
+        db_run(conn, "UPDATE participants SET rounds=%s WHERE emp_id=%s",
+               json.dumps(merged), correct_id)
+
+        # Delete wrong_id
+        db_run(conn, "DELETE FROM predictions  WHERE emp_id=%s", wrong_id)
+        db_run(conn, "DELETE FROM points_cache WHERE emp_id=%s", wrong_id)
+        db_run(conn, "DELETE FROM participants  WHERE emp_id=%s", wrong_id)
+
+        # Recalculate points for correct_id only
+        preds = db_run(conn, "SELECT round,match_name,prediction FROM predictions WHERE emp_id=%s", correct_id)
+        results_rows = db_run(conn, "SELECT round,match_name,result FROM matches WHERE status='done' AND result IS NOT NULL")
+        results = {(r[0],r[1]): r[2] for r in results_rows}
+        pts = {1:0.0, 2:0.0, 3:0.0}
+        for pr in preds:
+            key = (pr[0], pr[1])
+            if key in results and pr[2] and check_pred(pr[2], results[key]):
+                pts[pr[0]] += 3.0
+        bonus_row = db_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=%s", correct_id)
+        bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
+        total = pts[1] + pts[2] + pts[3] + bonus_pts
+        safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total)
+            VALUES (%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (emp_id) DO UPDATE SET
+            r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
+            r3_pts=EXCLUDED.r3_pts, total=EXCLUDED.total""",
+            correct_id, pts[1], pts[2], pts[3], bonus_pts, total)
+
+        return {
+            "status": "ok",
+            "merged": f"{wrong_id} ({wrong_name}) → {correct_id} ({correct_name})",
+            "predictions_moved": moved,
+            "rounds": merged,
+            "new_total_pts": total
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/rename-participant")
+def rename_participant(payload: dict, _=Depends(require_admin)):
+    """Change an employee ID to a new one (e.g. fix wrong ID)."""
+    old_id = str(payload.get("old_id", "")).strip()
+    new_id = str(payload.get("new_id", "")).strip()
+    if not old_id or not new_id:
+        raise HTTPException(400, "old_id and new_id are required")
+    if old_id == new_id:
+        raise HTTPException(400, "IDs are the same")
+    conn = get_conn()
+    try:
+        p = db_run(conn, "SELECT emp_id,name FROM participants WHERE emp_id=%s", old_id)
+        if not p: raise HTTPException(404, f"ID {old_id} not found")
+        existing = db_run(conn, "SELECT emp_id FROM participants WHERE emp_id=%s", new_id)
+        if existing: raise HTTPException(409, f"ID {new_id} already exists — use merge instead")
+        # Rename across all tables
+        db_run(conn, "INSERT INTO participants (emp_id,name,rounds) SELECT %s,name,rounds FROM participants WHERE emp_id=%s", new_id, old_id)
+        db_run(conn, "UPDATE predictions SET emp_id=%s WHERE emp_id=%s", new_id, old_id)
+        db_run(conn, "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) SELECT %s,r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=%s", new_id, old_id)
+        db_run(conn, "DELETE FROM points_cache WHERE emp_id=%s", old_id)
+        db_run(conn, "DELETE FROM predictions  WHERE emp_id=%s", old_id)
+        db_run(conn, "DELETE FROM participants  WHERE emp_id=%s", old_id)
+        return {"status": "ok", "renamed": f"{old_id} → {new_id}", "name": p[0][1]}
+    finally:
+        conn.close()
+
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
