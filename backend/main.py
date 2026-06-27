@@ -432,6 +432,50 @@ async def reset_reseed(_=Depends(require_admin)):
     threading.Thread(target=do_reset, daemon=True).start()
     return {"status":"ok","message":"Reset started in background — check /api/health in 30s"}
 
+@app.get("/api/admin/test-seed")
+def test_seed(_=Depends(require_admin)):
+    """Run seed synchronously and return detailed result."""
+    try:
+        conn = get_conn()
+        try:
+            # Drop and recreate
+            conn.run("DROP TABLE IF EXISTS points_cache CASCADE")
+            conn.run("DROP TABLE IF EXISTS predictions CASCADE")  
+            conn.run("DROP TABLE IF EXISTS matches CASCADE")
+            conn.run("DROP TABLE IF EXISTS participants CASCADE")
+            init_db(conn)
+            
+            # Load seed file
+            seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "seed_data.json")
+            with open(seed_path, encoding="utf-8") as f:
+                data = json.load(f)
+            
+            participants = data["participants"]
+            match_options = data.get("match_options", {})
+            
+            # Test single participant insert first
+            first_id, first_info = next(iter(participants.items()))
+            conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+                     first_id, first_info["name"], json.dumps(first_info["rounds"]))
+            
+            check = conn.run("SELECT COUNT(*) FROM participants")[0][0]
+            
+            return {
+                "status": "ok",
+                "participants_in_seed": len(participants),
+                "matches_r1": len(data["matches"]["R1"]),
+                "matches_r2": len(data["matches"]["R2"]),
+                "matches_r3": len(data["matches"]["R3"]),
+                "match_options_count": len(match_options),
+                "test_insert_worked": check == 1,
+                "first_participant": first_id,
+            }
+        finally:
+            conn.close()
+    except Exception as e:
+        traceback.print_exc()
+        return {"status": "error", "detail": str(e)}
+
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
