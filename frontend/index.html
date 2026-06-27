@@ -131,7 +131,7 @@ tr:hover td{background:var(--surface2)}
   <div class="hdiv"></div>
   <div class="htxt">
     <h1 id="h-title">مسابقة دوري التوقعات</h1>
-    <p id="h-sub">كأس العالم للأندية FIFA 2026</p>
+    <p id="h-sub">كأس العالم FIFA 2026</p>
   </div>
   <div class="hright">
     <div style="display:flex;gap:8px;align-items:center">
@@ -159,16 +159,16 @@ tr:hover td{background:var(--surface2)}
   <div id="part-section"></div>
 
   <div class="charts-row">
-    <div class="card"><div class="sec-title" id="chart1-title">توزيع النقاط الكلية</div>
+    <div class="card"><div class="sec-title" id="chart1-title">توزيع المشاركين حسب إجمالي النقاط</div>
       <div style="position:relative;width:100%;height:210px"><canvas id="distChart"></canvas></div>
     </div>
-    <div class="card"><div class="sec-title" id="chart2-title">متوسط النقاط لكل جولة</div>
+    <div class="card"><div class="sec-title" id="chart2-title">متوسط نقاط الجولة</div>
       <div style="position:relative;width:100%;height:210px"><canvas id="roundChart"></canvas></div>
     </div>
   </div>
 
   <div class="card-full">
-    <div class="sec-title" id="chart3-title">توزيع المشاركة حسب توليفات الجولات</div>
+    <div class="sec-title" id="chart3-title">توزيع المشاركين حسب الجولات</div>
     <div style="position:relative;width:100%;height:185px"><canvas id="partChart"></canvas></div>
   </div>
 
@@ -201,7 +201,7 @@ tr:hover td{background:var(--surface2)}
     <div class="pager" id="pager"></div>
   </div>
 
-  <div class="footer" id="footer-txt">SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026</div>
+  <div class="footer" id="footer-txt">SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم FIFA 2026</div>
 </div>
 </div>
 
@@ -216,7 +216,7 @@ let lastStats = null;
 const T = {
   ar: {
     title: 'مسابقة دوري التوقعات',
-    sub: 'كأس العالم للأندية FIFA 2026',
+    sub: 'كأس العالم FIFA 2026',
     badge: 'الجولة 3 — جارية',
     loading: 'جاري التحميل...',
     progress: 'تقدم البطولة',
@@ -225,22 +225,22 @@ const T = {
     allRounds: 'شاركوا في الجولات الثلاث',
     pctTotal: '% من الإجمالي',
     topScore: 'أعلى مجموع نقاط',
-    avgTotal: 'متوسط المجموع الكلي',
+    avgTotal: 'متوسط إجمالي النقاط',
     ptsPer: 'نقطة / مشارك',
-    avgR1: 'متوسط الجولة الأولى',
-    avgR2: 'متوسط الجولة الثانية',
-    avgR3: 'متوسط الجولة الثالثة',
+    avgR1: 'متوسط نقاط الجولة الأولى',
+    avgR2: 'متوسط نقاط الجولة الثانية',
+    avgR3: 'متوسط نقاط الجولة الثالثة',
     minPts: 'أقل مجموع نقاط',
     r1Part: 'مشاركو ج1', r2Part: 'مشاركو ج2', r3Part: 'مشاركو ج3',
     r1only: 'ج1 فقط', r2only: 'ج2 فقط', r3only: 'ج3 فقط',
-    chart1: 'توزيع النقاط الكلية',
-    chart2: 'متوسط النقاط لكل جولة',
-    chart3: 'توزيع المشاركة حسب توليفات الجولات',
+    chart1: 'توزيع المشاركين حسب إجمالي النقاط',
+    chart2: 'متوسط نقاط الجولة',
+    chart3: 'توزيع المشاركين حسب الجولات',
     lb: 'قائمة المتصدرين الكاملة',
     search: 'ابحث بالاسم أو الرقم...',
     thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات',
     bannerTitle: 'آخر نتائج مُسجَّلة',
-    footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026',
+    footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم FIFA 2026',
     participant: 'مشارك',
     roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة'],
     comboLabels: ['الثلاث','ج1+ج2','ج1+ج3','ج2+ج3','ج1 فقط','ج2 فقط','ج3 فقط'],
@@ -251,7 +251,7 @@ const T = {
   },
   en: {
     title: 'Prediction League',
-    sub: 'FIFA Club World Cup 2026',
+    sub: 'FIFA World Cup 2026',
     badge: 'Round 3 — Active',
     loading: 'Loading...',
     progress: 'Tournament Progress',
@@ -260,22 +260,22 @@ const T = {
     allRounds: 'Participated in all 3 rounds',
     pctTotal: '% of total',
     topScore: 'Top Score',
-    avgTotal: 'Average Total Score',
+    avgTotal: 'Average Total Points',
     ptsPer: 'pts / participant',
-    avgR1: 'Round 1 Average',
-    avgR2: 'Round 2 Average',
-    avgR3: 'Round 3 Average',
+    avgR1: 'Average Points – Round 1',
+    avgR2: 'Average Points – Round 2',
+    avgR3: 'Average Points – Round 3',
     minPts: 'Lowest Score',
     r1Part: 'R1 Participants', r2Part: 'R2 Participants', r3Part: 'R3 Participants',
     r1only: 'R1 Only', r2only: 'R2 Only', r3only: 'R3 Only',
-    chart1: 'Score Distribution',
+    chart1: 'Participant Distribution by Total Points',
     chart2: 'Average Points per Round',
-    chart3: 'Participation by Round Combination',
+    chart3: 'Participant Distribution by Rounds Participated',
     lb: 'Full Leaderboard',
     search: 'Search by name or ID...',
     thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds',
     bannerTitle: 'Latest Results',
-    footer: 'SMI Mechanical — Internal Prediction League · FIFA Club World Cup 2026',
+    footer: 'SMI Mechanical — Internal Prediction League · FIFA World Cup 2026',
     participant: 'participants',
     roundLabels: ['Round 1','Round 2','Round 3'],
     comboLabels: ['All 3','R1+R2','R1+R3','R2+R3','R1 Only','R2 Only','R3 Only'],
