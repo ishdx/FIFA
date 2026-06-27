@@ -78,7 +78,14 @@ html[dir="ltr"] .sec-title{padding-right:0;padding-left:9px;border-right:none;bo
 .prog-label{color:var(--text2);white-space:nowrap}
 .tbl-controls{display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap}
 .tbl-controls input,.tbl-controls select{padding:7px 11px;border:1px solid var(--border2);border-radius:var(--rad);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit}
-.tbl-controls input{flex:1;min-width:160px}
+.tbl-controls{position:relative}
+.tbl-controls input{flex:1;min-width:160px;padding-right:32px}
+html[dir="ltr"] .tbl-controls input{padding-right:11px;padding-left:32px}
+.search-wrap{position:relative;flex:1;min-width:160px;display:flex;align-items:center}
+.search-wrap input{width:100%;padding-right:32px}
+html[dir="ltr"] .search-wrap input{padding-right:11px;padding-left:32px}
+.search-icon{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
+html[dir="ltr"] .search-icon{right:auto;left:10px}
 .tbl-controls input:focus,.tbl-controls select:focus{outline:2px solid var(--red);outline-offset:1px}
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -137,7 +144,7 @@ tr:hover td{background:var(--surface2)}
 
 <div class="inner">
   <div id="banner" class="banner" style="display:none">
-    <strong id="b-title"><span class="icon"><i data-lucide="clipboard-list" style="width:14px;height:14px;"></i></span> آخر نتائج مُسجَّلة</strong> <span class="live-dot"></span>
+    <strong id="b-title">آخر نتائج مُسجَّلة</strong> <span class="live-dot"></span>
     <div class="banner-grid" id="banner-matches"></div>
   </div>
 
@@ -166,9 +173,9 @@ tr:hover td{background:var(--surface2)}
   </div>
 
   <div class="card-full">
-    <div class="sec-title" id="lb-title"><span class="icon"><i data-lucide="trophy" style="width:15px;height:15px;"></i></span> قائمة المتصدرين الكاملة</div>
+    <div class="sec-title" id="lb-title">قائمة المتصدرين الكاملة</div>
     <div class="tbl-controls">
-      <input type="text" id="search" oninput="loadTable()">
+      <div class="search-wrap"><input type="text" id="search" oninput="loadTable()"><i data-lucide="search" class="search-icon" style="width:14px;height:14px"></i></div>
       <select id="rf" onchange="loadTable()">
         <option value="all" data-ar="جميع الجولات" data-en="All Rounds">جميع الجولات</option>
         <option value="r1" data-ar="شارك في ج1" data-en="Round 1">شارك في ج1</option>
@@ -229,10 +236,10 @@ const T = {
     chart1: 'توزيع النقاط الكلية',
     chart2: 'متوسط النقاط لكل جولة',
     chart3: 'توزيع المشاركة حسب توليفات الجولات',
-    lb: '<span class="icon"><i data-lucide="trophy" style="width:15px;height:15px;"></i></span> قائمة المتصدرين الكاملة',
-    search: '🔍  ابحث بالاسم أو الرقم...',
+    lb: 'قائمة المتصدرين الكاملة',
+    search: 'ابحث بالاسم أو الرقم...',
     thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات',
-    bannerTitle: '<span class="icon"><i data-lucide="clipboard-list" style="width:14px;height:14px;"></i></span> آخر نتائج مُسجَّلة',
+    bannerTitle: 'آخر نتائج مُسجَّلة',
     footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026',
     participant: 'مشارك',
     roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة'],
@@ -264,10 +271,10 @@ const T = {
     chart1: 'Score Distribution',
     chart2: 'Average Points per Round',
     chart3: 'Participation by Round Combination',
-    lb: '<span class="icon"><i data-lucide="trophy" style="width:15px;height:15px;"></i></span> Full Leaderboard',
-    search: '🔍  Search by name or ID...',
+    lb: 'Full Leaderboard',
+    search: 'Search by name or ID...',
     thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds',
-    bannerTitle: '<span class="icon"><i data-lucide="clipboard-list" style="width:14px;height:14px;"></i></span> Latest Results',
+    bannerTitle: 'Latest Results',
     footer: 'SMI Mechanical — Internal Prediction League · FIFA Club World Cup 2026',
     participant: 'participants',
     roundLabels: ['Round 1','Round 2','Round 3'],
@@ -294,7 +301,7 @@ function applyLang() {
   document.getElementById('chart1-title').textContent = t('chart1');
   document.getElementById('chart2-title').textContent = t('chart2');
   document.getElementById('chart3-title').textContent = t('chart3');
-  document.getElementById('lb-title').textContent = t('lb');
+  document.getElementById('lb-title').innerHTML = '<i data-lucide="trophy" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-inline-end:5px"></i> ' + t('lb');
   document.getElementById('search').placeholder = t('search');
   document.getElementById('th-name').textContent = t('thName');
   document.getElementById('th-id').textContent = t('thId');
@@ -312,8 +319,7 @@ function applyLang() {
   const bt = document.getElementById('b-title');
   if(bt) bt.innerHTML = '<i data-lucide="clipboard-list" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:5px"></i> ' + t('bannerTitle');
   // Update lb title
-  const lt = document.getElementById('lb-title');
-  if(lt) lt.innerHTML = '<i data-lucide="trophy" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-left:5px;margin-right:2px"></i> ' + t('lb');
+  // lb-title handled above
   // Re-render data sections if already loaded
   if(lastStats) renderStats(lastStats);
   loadTable();
