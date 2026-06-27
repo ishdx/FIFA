@@ -357,6 +357,29 @@ async function loadAll() {
 
 // Auto-login if token saved
 autoLogin();
+
+async function recalcPoints() {
+  const btn = document.querySelector('[onclick="recalcPoints()"]');
+  const msg = document.getElementById('recalc-msg');
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري الحساب...';
+  msg.textContent = '';
+  const res = await fetch(API + '/api/admin/recalculate', {
+    method: 'POST',
+    headers: authHeaders()
+  });
+  const data = await res.json();
+  if (res.ok) {
+    msg.textContent = '✅ تم إعادة الحساب بنجاح';
+    showToast('✅ تمت إعادة حساب نقاط جميع المشاركين');
+    await loadStats();
+  } else {
+    msg.textContent = '❌ حدث خطأ';
+    showToast('خطأ: ' + (data.detail || 'حاول مجدداً'), true);
+  }
+  btn.disabled = false;
+  btn.textContent = '🔄 إعادة حساب النقاط';
+}
 </script>
 </body>
 </html>
