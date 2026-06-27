@@ -24,9 +24,11 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
 .header{background:var(--brand);padding:16px 28px;display:flex;align-items:center;gap:16px;border-radius:0 0 12px 12px;margin-bottom:22px}
 .header img{height:56px;width:auto;flex-shrink:0;}
 .hdiv{width:1px;height:40px;background:rgba(255,255,255,0.2);flex-shrink:0}
+.htxt{flex:1}
 .htxt h1{font-size:17px;font-weight:600;color:#fff}
 .htxt p{font-size:12px;color:rgba(255,255,255,0.55);margin-top:2px}
-.hright{margin-right:auto;text-align:left;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.hright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+html[dir="ltr"] .hright{align-items:flex-start}
 .badge{background:var(--red);color:#fff;border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600}
 .hdate{font-size:11px;color:rgba(255,255,255,0.45)}
 /* Language switcher */
