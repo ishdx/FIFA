@@ -300,7 +300,7 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
                            COALESCE(pc.bonus_pts,0),pc.total,p.rounds
                            FROM points_cache pc JOIN participants p ON pc.emp_id=p.emp_id
                            ORDER BY pc.total DESC, p.name ASC""")
-        results, rank, prev_total = [], 0, None
+        results = []
         for r in rows:
             rounds = json.loads(r[7])
             if round_filter=="r1" and 1 not in rounds: continue
@@ -308,8 +308,7 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
             if round_filter=="r3" and 3 not in rounds: continue
             if round_filter=="all3" and not all(x in rounds for x in [1,2,3]): continue
             if search and search.lower() not in r[1].lower() and search not in r[0]: continue
-            if r[6]!=prev_total: rank=len(results)+1; prev_total=r[6]
-            results.append({"rank":rank,"emp_id":r[0],"name":r[1],
+            results.append({"rank":len(results)+1,"emp_id":r[0],"name":r[1],
                             "r1":float(r[2]),"r2":float(r[3]),"r3":float(r[4]),
                             "bonus":float(r[5]),"total":float(r[6]),
                             "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds})
