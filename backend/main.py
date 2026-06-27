@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional
 import pg8000.native, json, os, secrets, asyncio, urllib.parse, traceback
@@ -28,7 +29,12 @@ class EventBroadcaster:
 
 broadcaster = EventBroadcaster()
 
-app = FastAPI(title="FIFA WC2026 Dashboard API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await asyncio.to_thread(startup)
+    yield
+
+app = FastAPI(title="FIFA WC2026 Dashboard API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -47,9 +53,9 @@ def get_conn():
         ssl_context=True,
     )
 
-def safe_run(conn, sql, **kwargs):
+def safe_run(conn, sql, *args):
     try:
-        return conn.run(sql, **kwargs)
+        return conn.run(sql, *args)
     except Exception as e:
         print(f"SQL error: {e}\nSQL: {sql}")
         return []
@@ -82,21 +88,21 @@ def recalc_all_points(conn):
     for row in all_ids:
         emp_id = row[0]
         preds = safe_run(conn,
-            "SELECT round, match_name, prediction FROM predictions WHERE emp_id=:e", e=emp_id)
+            "SELECT round, match_name, prediction FROM predictions WHERE emp_id=$1", emp_id)
         pts = {1: 0.0, 2: 0.0, 3: 0.0}
         for pr in preds:
             key = (pr[0], pr[1])
             if key in results and pr[2] and check_pred(pr[2], results[key]):
                 pts[pr[0]] += 3.0
-        bonus_row = safe_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=:e", e=emp_id)
+        bonus_row = safe_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=$1", emp_id)
         bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
         total = pts[1] + pts[2] + pts[3] + bonus_pts
         safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total)
-                    VALUES (:e,:r1,:r2,:r3,:b,:t)
+                    VALUES ($1,$2,$3,$4,$5,$6)
                     ON CONFLICT (emp_id) DO UPDATE SET
                     r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
                     r3_pts=EXCLUDED.r3_pts, total=EXCLUDED.total""",
-                 e=emp_id, r1=pts[1], r2=pts[2], r3=pts[3], b=bonus_pts, t=total)
+                 emp_id, pts[1], pts[2], pts[3], bonus_pts, total)
 
 # ── DB init ───────────────────────────────────────────────
 def init_db(conn):
@@ -229,7 +235,7 @@ def get_stats():
         top_data = {"name":"","total":0,"r1":0,"r2":0,"r3":0,"bonus":0}
         if top:
             t = top[0]
-            p = safe_run(conn, "SELECT name FROM participants WHERE emp_id=:e", e=t[0])
+            p = safe_run(conn, "SELECT name FROM participants WHERE emp_id=$1", t[0])
             top_data = {"name":p[0][0] if p else "","total":float(t[5] or 0),
                         "r1":float(t[1] or 0),"r2":float(t[2] or 0),"r3":float(t[3] or 0),"bonus":float(t[4] or 0)}
 
@@ -333,13 +339,13 @@ class MatchResult(BaseModel):
 async def submit_result(payload: MatchResult, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        ex = conn.run("SELECT id FROM matches WHERE round=:r AND match_name=:m",
-                      r=payload.round, m=payload.match_name)
+        ex = conn.run("SELECT id FROM matches WHERE round=$1 AND match_name=$2",
+                      payload.round, payload.match_name)
         if not ex:
             raise HTTPException(404, "Match not found")
-        conn.run("UPDATE matches SET result=:res,status='done',played_at=:t WHERE round=:r AND match_name=:m",
-                 res=payload.result, t=datetime.utcnow().isoformat(),
-                 r=payload.round, m=payload.match_name)
+        conn.run("UPDATE matches SET result=$1,status='done',played_at=$2 WHERE round=$3 AND match_name=$4",
+                 payload.result, datetime.utcnow().isoformat(),
+                 payload.round, payload.match_name)
         recalc_all_points(conn)
     finally:
         conn.close()
@@ -355,12 +361,12 @@ class BonusPoints(BaseModel):
 async def set_bonus(payload: BonusPoints, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        ex = conn.run("SELECT emp_id FROM participants WHERE emp_id=:e", e=payload.emp_id)
+        ex = conn.run("SELECT emp_id FROM participants WHERE emp_id=$1", payload.emp_id)
         if not ex:
             raise HTTPException(404, "Participant not found")
-        conn.run("""UPDATE points_cache SET bonus_pts=:b,
-                    total=r1_pts+r2_pts+r3_pts+:b WHERE emp_id=:e""",
-                 b=payload.bonus_pts, e=payload.emp_id)
+        conn.run("""UPDATE points_cache SET bonus_pts=$1,
+                    total=r1_pts+r2_pts+r3_pts+$1 WHERE emp_id=$2""",
+                 payload.bonus_pts, payload.emp_id)
     finally:
         conn.close()
     await broadcaster.broadcast({"type":"update","bonus":True})
@@ -380,10 +386,10 @@ def get_pending(_=Depends(require_admin)):
 def get_participant_detail(emp_id: str, _=Depends(require_admin)):
     conn = get_conn()
     try:
-        p = conn.run("SELECT emp_id,name,rounds FROM participants WHERE emp_id=:e", e=emp_id)
+        p = conn.run("SELECT emp_id,name,rounds FROM participants WHERE emp_id=$1", emp_id)
         if not p: raise HTTPException(404,"Participant not found")
-        preds = conn.run("SELECT round,match_name,prediction FROM predictions WHERE emp_id=:e ORDER BY round", e=emp_id)
-        pts = conn.run("SELECT r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=:e", e=emp_id)
+        preds = conn.run("SELECT round,match_name,prediction FROM predictions WHERE emp_id=$1 ORDER BY round", emp_id)
+        pts = conn.run("SELECT r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=$1", emp_id)
         match_res = conn.run("SELECT round,match_name,result FROM matches WHERE status='done'")
         mr = {(r[0],r[1]):r[2] for r in match_res}
         pred_detail = []
