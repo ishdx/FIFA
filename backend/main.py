@@ -123,13 +123,14 @@ def startup():
         conn.run("""CREATE TABLE IF NOT EXISTS points_cache (
             emp_id TEXT PRIMARY KEY,
             r1_pts REAL DEFAULT 0, r2_pts REAL DEFAULT 0,
-            r3_pts REAL DEFAULT 0, bonus_pts REAL DEFAULT 0,
-            total REAL DEFAULT 0)""")
-        # Add bonus_pts column if upgrading from old schema
-        try:
-            conn.run("ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS bonus_pts REAL DEFAULT 0")
-        except Exception:
-            pass
+            r3_pts REAL DEFAULT 0, total REAL DEFAULT 0)""")
+        # Safely add new columns to existing tables (handles schema upgrades)
+        for alter_sql in [
+            "ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS bonus_pts REAL DEFAULT 0",
+            "ALTER TABLE matches ADD COLUMN IF NOT EXISTS options TEXT DEFAULT '[]'",
+        ]:
+            try: conn.run(alter_sql)
+            except Exception: pass
 
         count = conn.run("SELECT COUNT(*) FROM participants")[0][0]
         if count > 0:
@@ -358,7 +359,11 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
 def reset_reseed(_=Depends(require_admin)):
     conn = get_conn()
     try:
-        conn.run("TRUNCATE TABLE points_cache,predictions,matches,participants RESTART IDENTITY CASCADE")
+        # Drop all tables completely so startup recreates them fresh
+        conn.run("DROP TABLE IF EXISTS points_cache CASCADE")
+        conn.run("DROP TABLE IF EXISTS predictions CASCADE")
+        conn.run("DROP TABLE IF EXISTS matches CASCADE")
+        conn.run("DROP TABLE IF EXISTS participants CASCADE")
     finally:
         conn.close()
     startup()
