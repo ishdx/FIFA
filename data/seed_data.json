@@ -10458,6 +10458,42 @@
       "r2_pts": 0.0,
       "r3_pts": 0.0,
       "bonus_pts": 0.0
+    },
+    "0000": {
+      "name": "MD Mijan",
+      "rounds": [
+        1
+      ],
+      "predictions": {
+        "R1:Mexico vs South Africa": "فوز المكسيك | Mexico Win",
+        "R1:South Korea vs Czech Republic": "فوز كوريا الجنوبية | South Korea Win",
+        "R1:Canada vs Bosnia and Herzegovina": "فوز كندا | Canada Win",
+        "R1:USA vs Paraguay": "فوز باراغواي | Paraguay Win",
+        "R1:Qatar vs Switzerland": "فوز سويسرا | Switzerland Win",
+        "R1:Brazil vs Morocco": "فوز البرازيل | Brazil Win",
+        "R1:Haiti vs Scotland": "فوز اسكتلندا | Scotland Win",
+        "R1:Australia vs Turkey": "فوز تركيا | Türkiye Win",
+        "R1:Germany vs Curaçao": "فوز ألمانيا | Germany Win",
+        "R1:Japan vs Netherlands": "فوز اليابان | Japan Win",
+        "R1:Ecuador vs Côte d'Ivoire": "فوز الإكوادور | Ecuador Win",
+        "R1:Tunisia vs Sweden": "فوز تونس | Tunisia Win",
+        "R1:Spain vs Cape Verde": "فوز إسبانيا | Spain Win",
+        "R1:Egypt vs Belgium": "فوز بلجيكا | Belgium Win",
+        "R1:Saudi Arabia vs Uruguay": "فوز السعودية | Saudi Arabia Win",
+        "R1:Iran vs New Zealand": "فوز إيران | Iran Win",
+        "R1:France vs Senegal": "فوز فرنسا | France Win",
+        "R1:Iraq vs Norway": "فوز النرويج | Norway Win",
+        "R1:Argentina vs Algeria": "فوز الأرجنتين | Argentina Win",
+        "R1:Jordan vs Austria": "تعادل | Draw",
+        "R1:Portugal vs DR Congo": "فوز البرتغال | Portugal Win",
+        "R1:England vs Croatia": "فوز كرواتيا | Croatia Win",
+        "R1:Ghana vs Panama": "فوز غانا | Ghana Win",
+        "R1:Colombia vs Uzbekistan": "فوز كولومبيا | Colombia Win"
+      },
+      "r1_pts": 0.0,
+      "r2_pts": 0.0,
+      "r3_pts": 0.0,
+      "bonus_pts": 0.0
     }
   },
   "matches": {
