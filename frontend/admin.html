@@ -256,17 +256,19 @@ function renderMatches(filter) {
       <td>${sel}</td>
       <td style="text-align:center">${badge}</td>
       <td style="text-align:center">
-        <button class="btn btn-red btn-sm" onclick="saveResult(${m.id},${m.round},'${m.match_name.replace(/'/g,"\'")}')">حفظ ✓</button>
+        <button class="btn btn-red btn-sm" data-id="${m.id}" data-round="${m.round}" data-name="${m.match_name.replace(/"/g,'&quot;')}" onclick="saveResult(this)">حفظ ✓</button>
       </td>
     </tr>`;
   }).join('');
 }
 
-async function saveResult(id, round, matchName) {
+async function saveResult(btn) {
+  const id = btn.dataset.id;
+  const round = parseInt(btn.dataset.round);
+  const matchName = btn.dataset.name;
   const sel = document.getElementById('sel-' + id);
   const result = sel.value;
   if (!result) { showToast('اختر النتيجة أولاً', true); return; }
-  const btn = sel.closest('tr').querySelector('button');
   btn.disabled = true; btn.textContent = '...';
   const res = await fetch(API + '/api/admin/result', {
     method: 'POST',
