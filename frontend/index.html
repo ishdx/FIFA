@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>مسابقة دوري التوقعات — كأس العالم FIFA 2026</title>
+<title>SMI — FIFA 2026 Prediction League</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -22,25 +22,27 @@
 body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,sans-serif;min-height:100vh}
 .wrapper{max-width:1120px;margin:0 auto;padding:0 0 40px}
 .header{background:var(--brand);padding:16px 28px;display:flex;align-items:center;gap:16px;border-radius:0 0 12px 12px;margin-bottom:22px}
-.header img{height:48px;object-fit:contain;}
-.hdiv{width:1px;height:40px;background:rgba(255,255,255,0.2)}
+.header img{height:56px;width:auto;flex-shrink:0;}
+.hdiv{width:1px;height:40px;background:rgba(255,255,255,0.2);flex-shrink:0}
 .htxt h1{font-size:17px;font-weight:600;color:#fff}
 .htxt p{font-size:12px;color:rgba(255,255,255,0.55);margin-top:2px}
-.hright{margin-right:auto;text-align:left}
+.hright{margin-right:auto;text-align:left;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .badge{background:var(--red);color:#fff;border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600}
-.hdate{font-size:11px;color:rgba(255,255,255,0.45);margin-top:5px}
+.hdate{font-size:11px;color:rgba(255,255,255,0.45)}
+/* Language switcher */
+.lang-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;
+  border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;cursor:pointer;
+  transition:background .2s;letter-spacing:.5px}
+.lang-btn:hover{background:rgba(255,255,255,0.25)}
 .inner{padding:0 22px}
-/* spinner */
 .spinner{display:flex;align-items:center;justify-content:center;height:200px}
 .spin{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* results banner */
 .banner{background:var(--surface);border:1px solid var(--border);border-right:4px solid var(--red);border-radius:var(--rad);padding:12px 16px;margin-bottom:18px;font-size:12px}
 .banner strong{color:var(--red);font-size:13px}
 .banner-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
 .match-chip{background:var(--surface2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--text2)}
 .match-chip span{color:var(--text);font-weight:600}
-/* kpi */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:14px 16px}
 .kpi .lbl{font-size:11px;color:var(--text2);margin-bottom:7px}
@@ -48,27 +50,23 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
 .kpi .sub{font-size:11px;color:var(--text3);margin-top:4px}
 .kpi.accent{border-color:var(--red);border-width:2px;background:var(--red-light)}
 .kpi.accent .val{color:var(--red)}
-/* avg */
 .avg-row{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:16px}
 .avg-pill{background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:10px 13px;text-align:center}
 .avg-pill .albl{font-size:11px;color:var(--text3);margin-bottom:3px}
 .avg-pill .aval{font-size:19px;font-weight:700}
-/* part */
 .part-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:18px}
 .part-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:10px 7px;text-align:center}
 .part-card .pnum{font-size:21px;font-weight:700}
 .part-card .pdesc{font-size:10px;color:var(--text2);margin-top:3px;line-height:1.4}
-/* charts */
 .charts-row{display:grid;grid-template-columns:1.5fr 1fr;gap:13px;margin-bottom:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:16px 18px}
 .card-full{background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:16px 18px;margin-bottom:14px}
 .sec-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:13px;padding-right:9px;border-right:3px solid var(--red)}
-/* progress indicator */
+html[dir="ltr"] .sec-title{padding-right:0;padding-left:9px;border-right:none;border-left:3px solid var(--red)}
 .progress-wrap{margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:12px 16px;display:flex;align-items:center;gap:14px;font-size:12px}
 .prog-bar-bg{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
 .prog-bar{height:100%;background:var(--red);border-radius:4px;transition:width .5s ease}
 .prog-label{color:var(--text2);white-space:nowrap}
-/* table */
 .tbl-controls{display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap}
 .tbl-controls input,.tbl-controls select{padding:7px 11px;border:1px solid var(--border2);border-radius:var(--rad);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit}
 .tbl-controls input{flex:1;min-width:160px}
@@ -76,6 +74,7 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{padding:8px 9px;border-bottom:2px solid var(--border2);color:var(--text2);font-weight:600;font-size:11px;text-align:right;white-space:nowrap}
+html[dir="ltr"] th{text-align:left}
 td{padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--surface2)}
@@ -103,7 +102,8 @@ tr:hover td{background:var(--surface2)}
   .part-grid{grid-template-columns:repeat(3,1fr)}
   .charts-row{grid-template-columns:1fr}
   .banner-grid{grid-template-columns:repeat(2,1fr)}
-  .header{padding:12px 14px}.inner{padding:0 10px}
+  .header{padding:12px 14px;gap:10px}.inner{padding:0 10px}
+  .htxt h1{font-size:14px}
 }
 @media(max-width:480px){.part-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
@@ -114,18 +114,21 @@ tr:hover td{background:var(--surface2)}
   <img src="/logo.png" alt="SMI" style="height:56px;width:auto;flex-shrink:0;">
   <div class="hdiv"></div>
   <div class="htxt">
-    <h1>مسابقة دوري التوقعات</h1>
-    <p>كأس العالم للأندية FIFA 2026</p>
+    <h1 id="h-title">مسابقة دوري التوقعات</h1>
+    <p id="h-sub">كأس العالم للأندية FIFA 2026</p>
   </div>
   <div class="hright">
-    <div class="badge" id="round-badge">الجولة 3 — جارية</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="badge" id="round-badge">الجولة 3 — جارية</div>
+      <button class="lang-btn" id="lang-btn" onclick="toggleLang()">EN</button>
+    </div>
     <div class="hdate" id="hdr-date"></div>
   </div>
 </div>
 
 <div class="inner">
   <div id="banner" class="banner" style="display:none">
-    <strong>📋 آخر نتائج مُسجَّلة</strong> <span class="live-dot"></span>
+    <strong id="b-title">📋 آخر نتائج مُسجَّلة</strong> <span class="live-dot"></span>
     <div class="banner-grid" id="banner-matches"></div>
   </div>
 
@@ -135,154 +138,262 @@ tr:hover td{background:var(--surface2)}
     <span class="prog-label" id="prog-count"></span>
   </div>
 
-  <div id="kpi-section">
-    <div class="spinner"><div class="spin"></div></div>
-  </div>
-
+  <div id="kpi-section"><div class="spinner"><div class="spin"></div></div></div>
   <div id="avg-section"></div>
   <div id="part-section"></div>
 
   <div class="charts-row">
-    <div class="card"><div class="sec-title">توزيع النقاط الكلية</div>
+    <div class="card"><div class="sec-title" id="chart1-title">توزيع النقاط الكلية</div>
       <div style="position:relative;width:100%;height:210px"><canvas id="distChart"></canvas></div>
     </div>
-    <div class="card"><div class="sec-title">متوسط النقاط لكل جولة</div>
+    <div class="card"><div class="sec-title" id="chart2-title">متوسط النقاط لكل جولة</div>
       <div style="position:relative;width:100%;height:210px"><canvas id="roundChart"></canvas></div>
     </div>
   </div>
 
-  <div class="card-full"><div class="sec-title">توزيع المشاركة حسب توليفات الجولات</div>
+  <div class="card-full">
+    <div class="sec-title" id="chart3-title">توزيع المشاركة حسب توليفات الجولات</div>
     <div style="position:relative;width:100%;height:185px"><canvas id="partChart"></canvas></div>
   </div>
 
   <div class="card-full">
-    <div class="sec-title">🏆 قائمة المتصدرين الكاملة</div>
+    <div class="sec-title" id="lb-title">🏆 قائمة المتصدرين الكاملة</div>
     <div class="tbl-controls">
-      <input type="text" id="search" placeholder="🔍  ابحث بالاسم أو الرقم..." oninput="loadTable()">
+      <input type="text" id="search" oninput="loadTable()">
       <select id="rf" onchange="loadTable()">
-        <option value="all">جميع الجولات</option>
-        <option value="r1">شارك في ج1</option>
-        <option value="r2">شارك في ج2</option>
-        <option value="r3">شارك في ج3</option>
-        <option value="all3">شارك في الثلاث</option>
+        <option value="all" data-ar="جميع الجولات" data-en="All Rounds">جميع الجولات</option>
+        <option value="r1" data-ar="شارك في ج1" data-en="Round 1">شارك في ج1</option>
+        <option value="r2" data-ar="شارك في ج2" data-en="Round 2">شارك في ج2</option>
+        <option value="r3" data-ar="شارك في ج3" data-en="Round 3">شارك في ج3</option>
+        <option value="all3" data-ar="شارك في الثلاث" data-en="All 3 Rounds">شارك في الثلاث</option>
       </select>
       <span class="pg-info" id="pg-info"></span>
     </div>
     <div class="tbl-wrap">
-      <table><thead><tr>
+      <table><thead><tr id="tbl-head">
         <th style="width:38px;text-align:center">#</th>
-        <th>الاسم</th>
-        <th style="width:75px;text-align:center">الرقم</th>
+        <th id="th-name">الاسم</th>
+        <th style="width:75px;text-align:center" id="th-id">الرقم</th>
         <th style="width:46px;text-align:center;color:var(--r1)">ج1</th>
         <th style="width:46px;text-align:center;color:var(--r2)">ج2</th>
         <th style="width:46px;text-align:center;color:var(--r3)">ج3</th>
-        <th style="width:130px">المجموع</th>
-        <th style="width:55px;text-align:center">الجولات</th>
+        <th style="width:130px" id="th-total">المجموع</th>
+        <th style="width:55px;text-align:center" id="th-rounds">الجولات</th>
       </tr></thead>
       <tbody id="lb-body"></tbody></table>
     </div>
     <div class="pager" id="pager"></div>
   </div>
 
-  <div class="footer">SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026</div>
+  <div class="footer" id="footer-txt">SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026</div>
 </div>
 </div>
 
 <script>
-const API = '';  // same origin
+const API = '';
 let page = 1, maxPts = 1;
 let distChart, roundChart, partChart;
+let lang = localStorage.getItem('dash_lang') || 'ar';
+let lastStats = null;
 
-document.getElementById('hdr-date').textContent =
-  'آخر تحديث: ' + new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'});
+// ── Translations ──────────────────────────────────────────
+const T = {
+  ar: {
+    title: 'مسابقة دوري التوقعات',
+    sub: 'كأس العالم للأندية FIFA 2026',
+    badge: 'الجولة 3 — جارية',
+    loading: 'جاري التحميل...',
+    progress: 'تقدم البطولة',
+    matches: 'مباراة',
+    participants: 'موظف مسجّل',
+    allRounds: 'شاركوا في الجولات الثلاث',
+    pctTotal: '% من الإجمالي',
+    topScore: 'أعلى مجموع نقاط 🥇',
+    avgTotal: 'متوسط المجموع الكلي',
+    ptsPer: 'نقطة / مشارك',
+    avgR1: 'متوسط الجولة الأولى',
+    avgR2: 'متوسط الجولة الثانية',
+    avgR3: 'متوسط الجولة الثالثة',
+    minPts: 'أقل مجموع نقاط',
+    r1Part: 'مشاركو ج1', r2Part: 'مشاركو ج2', r3Part: 'مشاركو ج3',
+    r1only: 'ج1 فقط', r2only: 'ج2 فقط', r3only: 'ج3 فقط',
+    chart1: 'توزيع النقاط الكلية',
+    chart2: 'متوسط النقاط لكل جولة',
+    chart3: 'توزيع المشاركة حسب توليفات الجولات',
+    lb: '🏆 قائمة المتصدرين الكاملة',
+    search: '🔍  ابحث بالاسم أو الرقم...',
+    thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات',
+    bannerTitle: '📋 آخر نتائج مُسجَّلة',
+    footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026',
+    participant: 'مشارك',
+    roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة'],
+    comboLabels: ['الثلاث','ج1+ج2','ج1+ج3','ج2+ج3','ج1 فقط','ج2 فقط','ج3 فقط'],
+    tooltipRange: 'نطاق: ', tooltipPart: ' مشارك', tooltipPts: ' نقطة',
+    updated: 'آخر تحديث: ',
+    flashUpdate: '✅ New Result: ',
+    flashUpdated: '✅ Results Updated',
+  },
+  en: {
+    title: 'Prediction League',
+    sub: 'FIFA Club World Cup 2026',
+    badge: 'Round 3 — Active',
+    loading: 'Loading...',
+    progress: 'Tournament Progress',
+    matches: 'matches',
+    participants: 'registered employees',
+    allRounds: 'Participated in all 3 rounds',
+    pctTotal: '% of total',
+    topScore: 'Top Score 🥇',
+    avgTotal: 'Average Total Score',
+    ptsPer: 'pts / participant',
+    avgR1: 'Round 1 Average',
+    avgR2: 'Round 2 Average',
+    avgR3: 'Round 3 Average',
+    minPts: 'Lowest Score',
+    r1Part: 'R1 Participants', r2Part: 'R2 Participants', r3Part: 'R3 Participants',
+    r1only: 'R1 Only', r2only: 'R2 Only', r3only: 'R3 Only',
+    chart1: 'Score Distribution',
+    chart2: 'Average Points per Round',
+    chart3: 'Participation by Round Combination',
+    lb: '🏆 Full Leaderboard',
+    search: '🔍  Search by name or ID...',
+    thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds',
+    bannerTitle: '📋 Latest Results',
+    footer: 'SMI Mechanical — Internal Prediction League · FIFA Club World Cup 2026',
+    participant: 'participants',
+    roundLabels: ['Round 1','Round 2','Round 3'],
+    comboLabels: ['All 3','R1+R2','R1+R3','R2+R3','R1 Only','R2 Only','R3 Only'],
+    tooltipRange: 'Range: ', tooltipPart: ' participants', tooltipPts: ' pts',
+    updated: 'Last updated: ',
+    flashUpdate: '✅ New Result: ',
+    flashUpdated: '✅ Results Updated',
+  }
+};
 
+function t(key){ return T[lang][key] || key; }
+
+function applyLang() {
+  const isAr = lang === 'ar';
+  document.documentElement.lang = lang;
+  document.documentElement.dir = isAr ? 'rtl' : 'ltr';
+  document.getElementById('lang-btn').textContent = isAr ? 'EN' : 'عربي';
+  document.getElementById('h-title').textContent = t('title');
+  document.getElementById('h-sub').textContent = t('sub');
+  document.getElementById('round-badge').textContent = t('badge');
+  document.getElementById('b-title').innerHTML = t('bannerTitle') + ' <span class="live-dot"></span>';
+  document.getElementById('prog-label').textContent = t('progress');
+  document.getElementById('chart1-title').textContent = t('chart1');
+  document.getElementById('chart2-title').textContent = t('chart2');
+  document.getElementById('chart3-title').textContent = t('chart3');
+  document.getElementById('lb-title').textContent = t('lb');
+  document.getElementById('search').placeholder = t('search');
+  document.getElementById('th-name').textContent = t('thName');
+  document.getElementById('th-id').textContent = t('thId');
+  document.getElementById('th-total').textContent = t('thTotal');
+  document.getElementById('th-rounds').textContent = t('thRounds');
+  document.getElementById('footer-txt').textContent = t('footer');
+  document.getElementById('hdr-date').textContent = t('updated') +
+    new Date().toLocaleDateString(isAr ? 'en-GB' : 'en-GB',{year:'numeric',month:'long',day:'numeric'});
+  // Update select options
+  document.querySelectorAll('#rf option').forEach(o => {
+    o.textContent = o.dataset[lang] || o.textContent;
+  });
+  localStorage.setItem('dash_lang', lang);
+  // Re-render data sections if already loaded
+  if(lastStats) renderStats(lastStats);
+  loadTable();
+}
+
+function toggleLang() {
+  lang = lang === 'ar' ? 'en' : 'ar';
+  applyLang();
+}
+
+// ── Data loading ──────────────────────────────────────────
 async function loadStats() {
   const res = await fetch(API + '/api/stats');
-  const s = await res.json();
+  lastStats = await res.json();
+  renderStats(lastStats);
+}
 
-  // progress bar
-  const total_matches = 104;  // Total FIFA Club World Cup 2026 matches
+function renderStats(s) {
+  const total_matches = 104;
   const pct = Math.round(s.matches_done/total_matches*100);
   document.getElementById('prog-bar').style.width = pct+'%';
-  document.getElementById('prog-label').textContent = 'تقدم البطولة';
-  document.getElementById('prog-count').textContent = s.matches_done+' / '+total_matches+' مباراة';
+  document.getElementById('prog-count').textContent = s.matches_done+' / '+total_matches+' '+t('matches');
 
-  // KPI
   document.getElementById('kpi-section').innerHTML = `
     <div class="kpi-grid">
-      <div class="kpi"><div class="lbl">👥 إجمالي المشاركين</div>
-        <div class="val">${s.total_participants}</div><div class="sub">موظف مسجّل</div></div>
-      <div class="kpi"><div class="lbl">🎯 شاركوا في الجولات الثلاث</div>
+      <div class="kpi"><div class="lbl">👥 ${t('title').includes('مساب') ? 'إجمالي المشاركين' : 'Total Participants'}</div>
+        <div class="val">${s.total_participants}</div><div class="sub">${t('participants')}</div></div>
+      <div class="kpi"><div class="lbl">🎯 ${t('allRounds')}</div>
         <div class="val" style="color:var(--r1)">${s.all3_participants}</div>
-        <div class="sub">${Math.round(s.all3_participants/s.total_participants*100)}% من الإجمالي</div></div>
-      <div class="kpi accent"><div class="lbl">🥇 أعلى مجموع نقاط</div>
+        <div class="sub">${Math.round(s.all3_participants/s.total_participants*100)}${t('pctTotal')}</div></div>
+      <div class="kpi accent"><div class="lbl">${t('topScore')}</div>
         <div class="val">${s.leader.total}</div><div class="sub">${s.leader.name}</div></div>
-      <div class="kpi"><div class="lbl">📊 متوسط المجموع الكلي</div>
-        <div class="val">${s.avg_total}</div><div class="sub">نقطة / مشارك</div></div>
+      <div class="kpi"><div class="lbl">📊 ${t('avgTotal')}</div>
+        <div class="val">${s.avg_total}</div><div class="sub">${t('ptsPer')}</div></div>
     </div>`;
 
-  // AVG
   document.getElementById('avg-section').innerHTML = `
     <div class="avg-row">
-      <div class="avg-pill"><div class="albl">متوسط الجولة الأولى</div>
-        <div class="aval" style="color:var(--r1)">${s.avg_r1}</div></div>
-      <div class="avg-pill"><div class="albl">متوسط الجولة الثانية</div>
-        <div class="aval" style="color:var(--r2)">${s.avg_r2}</div></div>
-      <div class="avg-pill"><div class="albl">متوسط الجولة الثالثة</div>
-        <div class="aval" style="color:var(--r3)">${s.avg_r3}</div></div>
-      <div class="avg-pill"><div class="albl">أقل مجموع نقاط</div>
-        <div class="aval" style="color:var(--text2)">${s.min_total}</div></div>
+      <div class="avg-pill"><div class="albl">${t('avgR1')}</div><div class="aval" style="color:var(--r1)">${s.avg_r1}</div></div>
+      <div class="avg-pill"><div class="albl">${t('avgR2')}</div><div class="aval" style="color:var(--r2)">${s.avg_r2}</div></div>
+      <div class="avg-pill"><div class="albl">${t('avgR3')}</div><div class="aval" style="color:var(--r3)">${s.avg_r3}</div></div>
+      <div class="avg-pill"><div class="albl">${t('minPts')}</div><div class="aval" style="color:var(--text2)">${s.min_total}</div></div>
     </div>`;
 
-  // PART
   const c = s.combos;
   document.getElementById('part-section').innerHTML = `
     <div class="part-grid">
-      <div class="part-card"><div class="pnum" style="color:var(--r1)">${s.r1_participants}</div><div class="pdesc">مشاركو ج1</div></div>
-      <div class="part-card"><div class="pnum" style="color:var(--r2)">${s.r2_participants}</div><div class="pdesc">مشاركو ج2</div></div>
-      <div class="part-card"><div class="pnum" style="color:var(--r3)">${s.r3_participants}</div><div class="pdesc">مشاركو ج3</div></div>
-      <div class="part-card"><div class="pnum">${c.r1only}</div><div class="pdesc">ج1 فقط</div></div>
-      <div class="part-card"><div class="pnum">${c.r2only}</div><div class="pdesc">ج2 فقط</div></div>
-      <div class="part-card"><div class="pnum">${c.r3only}</div><div class="pdesc">ج3 فقط</div></div>
+      <div class="part-card"><div class="pnum" style="color:var(--r1)">${s.r1_participants}</div><div class="pdesc">${t('r1Part')}</div></div>
+      <div class="part-card"><div class="pnum" style="color:var(--r2)">${s.r2_participants}</div><div class="pdesc">${t('r2Part')}</div></div>
+      <div class="part-card"><div class="pnum" style="color:var(--r3)">${s.r3_participants}</div><div class="pdesc">${t('r3Part')}</div></div>
+      <div class="part-card"><div class="pnum">${c.r1only}</div><div class="pdesc">${t('r1only')}</div></div>
+      <div class="part-card"><div class="pnum">${c.r2only}</div><div class="pdesc">${t('r2only')}</div></div>
+      <div class="part-card"><div class="pnum">${c.r3only}</div><div class="pdesc">${t('r3only')}</div></div>
     </div>`;
 
-  // Charts
+  buildCharts(s);
+}
+
+function buildCharts(s) {
   const isDark = matchMedia('(prefers-color-scheme:dark)').matches;
   const grid = isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)';
   const tick = isDark?'#6a6a64':'#888';
+  const c = s.combos;
 
   if(distChart) distChart.destroy();
   distChart = new Chart(document.getElementById('distChart'),{
     type:'bar',
-    data:{labels:s.dist_labels,datasets:[{
-      data:s.dist_values,label:'مشاركون',
-      backgroundColor:s.dist_values.map(v=>v>=15?'#E01428':'#f5a0aa'),
-      borderWidth:0,borderRadius:4}]},
+    data:{labels:s.dist_labels,datasets:[{data:s.dist_values,label:t('participant'),
+      backgroundColor:s.dist_values.map(v=>v>=15?'#E01428':'#f5a0aa'),borderWidth:0,borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{title:c=>'نطاق: '+c[0].label,label:c=>' '+c.raw+' مشارك'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        title:c=>t('tooltipRange')+c[0].label,
+        label:c=>' '+c.raw+t('tooltipPart')}}},
       scales:{x:{ticks:{font:{size:10},color:tick},grid:{display:false}},
               y:{beginAtZero:true,ticks:{font:{size:10},color:tick},grid:{color:grid}}}}});
 
   if(roundChart) roundChart.destroy();
   roundChart = new Chart(document.getElementById('roundChart'),{
     type:'bar',
-    data:{labels:['الجولة الأولى','الجولة الثانية','الجولة الثالثة'],
-          datasets:[{data:[s.avg_r1,s.avg_r2,s.avg_r3],label:'متوسط',
-            backgroundColor:['#1565C0','#2E7D32','#E01428'],borderWidth:0,borderRadius:6}]},
+    data:{labels:t('roundLabels'),datasets:[{data:[s.avg_r1,s.avg_r2,s.avg_r3],
+      backgroundColor:['#1565C0','#2E7D32','#E01428'],borderWidth:0,borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw.toFixed(1)+' نقطة'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw.toFixed(1)+t('tooltipPts')}}},
       scales:{x:{ticks:{font:{size:11},color:tick},grid:{display:false}},
               y:{beginAtZero:true,ticks:{font:{size:10},color:tick},grid:{color:grid}}}}});
 
   if(partChart) partChart.destroy();
   partChart = new Chart(document.getElementById('partChart'),{
     type:'bar',
-    data:{labels:['الثلاث','ج1+ج2','ج1+ج3','ج2+ج3','ج1 فقط','ج2 فقط','ج3 فقط'],
-          datasets:[{data:[c.all3,c.r1r2,c.r1r3,c.r2r3,c.r1only,c.r2only,c.r3only],
-            backgroundColor:['#1A1A1A','#1565C0','#0277BD','#2E7D32','#66BB6A','#8BC34A','#E01428'],
-            borderWidth:0,borderRadius:4}]},
+    data:{labels:t('comboLabels'),datasets:[{
+      data:[c.all3,c.r1r2,c.r1r3,c.r2r3,c.r1only,c.r2only,c.r3only],
+      backgroundColor:['#1A1A1A','#1565C0','#0277BD','#2E7D32','#66BB6A','#8BC34A','#E01428'],
+      borderWidth:0,borderRadius:4}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+' مشارك'}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+t('tooltipPart')}}},
       scales:{x:{beginAtZero:true,ticks:{font:{size:10},color:tick},grid:{color:grid}},
               y:{ticks:{font:{size:11},color:tick},grid:{display:false}}}}});
 }
@@ -290,12 +401,11 @@ async function loadStats() {
 async function loadRecentResults() {
   const res = await fetch(API + '/api/matches');
   const matches = await res.json();
-  const done = matches.filter(m=>m.status==='done' && m.round===3)
-                      .sort((a,b)=>b.id-a.id).slice(0,6);
+  const done = matches.filter(m=>m.status==='done').sort((a,b)=>b.id-a.id).slice(0,6);
   if(!done.length) return;
   document.getElementById('banner').style.display='block';
-  document.getElementById('banner-matches').innerHTML = done.map(m=>`
-    <div class="match-chip">${m.match_name} — <span>${m.result}</span></div>`).join('');
+  document.getElementById('banner-matches').innerHTML = done.map(m=>
+    `<div class="match-chip">${m.match_name} — <span>${m.result}</span></div>`).join('');
 }
 
 async function loadTable() {
@@ -304,17 +414,17 @@ async function loadTable() {
   const url = `${API}/api/leaderboard?page=${page}&per_page=20&search=${encodeURIComponent(search)}&round_filter=${rf}`;
   const res = await fetch(url);
   const data = await res.json();
-  if(!maxPts && data.data.length) maxPts = data.data[0].total;
   if(data.data.length) maxPts = Math.max(maxPts, data.data[0].total);
 
   const medal={1:'r1b',2:'r2b',3:'r3b'};
-  document.getElementById('lb-body').innerHTML = data.data.map(p=>{
+  document.getElementById('lb-body').innerHTML = data.data.map((p,idx)=>{
+    const seqRank = (page-1)*20 + idx + 1;
     const pct=Math.round((p.total/maxPts)*100);
     const dots=[p.p1,p.p2,p.p3].map(v=>`<div class="dot ${v?'dot-on':'dot-off'}"></div>`).join('');
-    const cls=medal[p.rank]||'rnb';
+    const cls=medal[seqRank]||'rnb';
     return `<tr>
-      <td style="text-align:center"><span class="rnk ${cls}">${p.rank}</span></td>
-      <td style="font-weight:${p.rank<=3?600:400}">${p.name}</td>
+      <td style="text-align:center"><span class="rnk ${cls}">${seqRank}</span></td>
+      <td style="font-weight:${seqRank<=3?600:400}">${p.name}</td>
       <td style="text-align:center;color:var(--text2);font-size:12px">${p.emp_id}</td>
       <td style="text-align:center;color:var(--r1);font-weight:500">${p.p1?p.r1:'—'}</td>
       <td style="text-align:center;color:var(--r2);font-weight:500">${p.p2?p.r2:'—'}</td>
@@ -327,7 +437,7 @@ async function loadTable() {
     </tr>`;
   }).join('');
 
-  document.getElementById('pg-info').textContent = data.total+' مشارك';
+  document.getElementById('pg-info').textContent = data.total+' '+t('participant');
   renderPager(data.total, data.per_page);
 }
 
@@ -347,23 +457,14 @@ function goPage(p){ if(p<1)return; page=p; loadTable(); }
 
 function connectSSE() {
   const es = new EventSource(API + '/api/events');
-
   es.onmessage = async (e) => {
     const data = JSON.parse(e.data);
-    if (data.type === 'update') {
-      // A result was just entered — refresh everything instantly
-      await loadStats();
-      await loadRecentResults();
-      await loadTable();
-      showFlash(data.match ? `✅ نتيجة جديدة: ${data.match}` : '✅ تم تحديث النتائج');
+    if(data.type==='update'){
+      await loadStats(); await loadRecentResults(); await loadTable();
+      showFlash(data.match ? t('flashUpdate')+data.match : t('flashUpdated'));
     }
   };
-
-  es.onerror = () => {
-    // Connection dropped — reconnect after 5s
-    es.close();
-    setTimeout(connectSSE, 5000);
-  };
+  es.onerror = ()=>{ es.close(); setTimeout(connectSSE, 5000); };
 }
 
 function showFlash(msg) {
@@ -373,14 +474,15 @@ function showFlash(msg) {
     background:#1A1A1A;color:#fff;padding:10px 22px;border-radius:9px;font-size:13px;
     z-index:999;border-right:4px solid #E01428;transition:opacity .4s`;
   document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3500);
+  setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.remove(),400); },3500);
 }
 
 async function init(){
+  applyLang();
   await loadStats();
   await loadRecentResults();
   await loadTable();
-  connectSSE();  // live updates — no polling needed
+  connectSSE();
 }
 init();
 </script>
