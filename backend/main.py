@@ -145,7 +145,7 @@ def seed_db(conn):
                 "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (:e,:r,:m,:p) ON CONFLICT DO NOTHING",
                 e=emp_id, r=rnd, m=match, p=pred_val)
         safe_run(conn,
-            "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES (:e,0,0,0,0,0) ON CONFLICT DO NOTHING",
+            "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,total) VALUES (:e,0,0,0,0) ON CONFLICT DO NOTHING",
             e=emp_id)
 
     for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
@@ -185,23 +185,25 @@ def health():
 def get_stats():
     conn = get_conn()
     try:
-        total   = conn.run("SELECT COUNT(*) FROM participants")[0][0]
-        r1c     = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=1")[0][0]
-        r2c     = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2")[0][0]
-        r3c     = conn.run("SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3")[0][0]
-        all3    = conn.run("SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)=3) x")[0][0]
-        top     = conn.run("SELECT emp_id,r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache ORDER BY total DESC LIMIT 1")
-        avg     = conn.run("SELECT AVG(total),AVG(r1_pts),AVG(r2_pts),AVG(r3_pts) FROM points_cache")[0]
-        mn      = conn.run("SELECT MIN(total) FROM points_cache")[0][0]
-        done    = conn.run("SELECT COUNT(*) FROM matches WHERE status='done'")[0][0]
-        pending = conn.run("SELECT COUNT(*) FROM matches WHERE status='pending'")[0][0]
+        total   = safe_run(conn, "SELECT COUNT(*) FROM participants") or [[0]]
+        total   = total[0][0]
+        r1c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=1") or [[0]])[0][0]
+        r2c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2") or [[0]])[0][0]
+        r3c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3") or [[0]])[0][0]
+        all3    = (safe_run(conn, "SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)=3) x") or [[0]])[0][0]
+        top     = safe_run(conn, "SELECT emp_id,r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache ORDER BY total DESC LIMIT 1") or []
+        avg_row = safe_run(conn, "SELECT AVG(total),AVG(r1_pts),AVG(r2_pts),AVG(r3_pts) FROM points_cache") or [[0,0,0,0]]
+        avg     = avg_row[0]
+        mn      = (safe_run(conn, "SELECT MIN(total) FROM points_cache") or [[0]])[0][0]
+        done    = (safe_run(conn, "SELECT COUNT(*) FROM matches WHERE status='done'") or [[0]])[0][0]
+        pending = (safe_run(conn, "SELECT COUNT(*) FROM matches WHERE status='pending'") or [[0]])[0][0]
 
         top_data = {"name":"","total":0,"r1":0,"r2":0,"r3":0,"bonus":0}
         if top:
             t = top[0]
-            p = conn.run("SELECT name FROM participants WHERE emp_id=:e", e=t[0])
-            top_data = {"name":p[0][0] if p else "","total":float(t[5]),
-                        "r1":float(t[1]),"r2":float(t[2]),"r3":float(t[3]),"bonus":float(t[4])}
+            p = safe_run(conn, "SELECT name FROM participants WHERE emp_id=:e", e=t[0])
+            top_data = {"name":p[0][0] if p else "","total":float(t[5] or 0),
+                        "r1":float(t[1] or 0),"r2":float(t[2] or 0),"r3":float(t[3] or 0),"bonus":float(t[4] or 0)}
 
         combos = {}
         for k, q in [
