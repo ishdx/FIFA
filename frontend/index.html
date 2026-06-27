@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMI — FIFA 2026 Prediction League</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -31,6 +32,12 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
 html[dir="ltr"] .hright{align-items:flex-start}
 .badge{background:var(--red);color:#fff;border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600}
 .hdate{font-size:11px;color:rgba(255,255,255,0.45)}
+/* Icons */
+.icon{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+.icon svg{width:14px;height:14px;stroke-width:2}
+.kpi .icon svg{width:15px;height:15px}
+.sec-title .icon svg{width:15px;height:15px}
+.banner .icon svg{width:13px;height:13px}
 /* Language switcher */
 .lang-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;
   border-radius:20px;padding:4px 14px;font-size:12px;font-weight:600;cursor:pointer;
@@ -130,7 +137,7 @@ tr:hover td{background:var(--surface2)}
 
 <div class="inner">
   <div id="banner" class="banner" style="display:none">
-    <strong id="b-title">📋 آخر نتائج مُسجَّلة</strong> <span class="live-dot"></span>
+    <strong id="b-title"><span class="icon"><i data-lucide="clipboard-list" style="width:14px;height:14px;"></i></span> آخر نتائج مُسجَّلة</strong> <span class="live-dot"></span>
     <div class="banner-grid" id="banner-matches"></div>
   </div>
 
@@ -159,7 +166,7 @@ tr:hover td{background:var(--surface2)}
   </div>
 
   <div class="card-full">
-    <div class="sec-title" id="lb-title">🏆 قائمة المتصدرين الكاملة</div>
+    <div class="sec-title" id="lb-title"><span class="icon"><i data-lucide="trophy" style="width:15px;height:15px;"></i></span> قائمة المتصدرين الكاملة</div>
     <div class="tbl-controls">
       <input type="text" id="search" oninput="loadTable()">
       <select id="rf" onchange="loadTable()">
@@ -210,7 +217,7 @@ const T = {
     participants: 'موظف مسجّل',
     allRounds: 'شاركوا في الجولات الثلاث',
     pctTotal: '% من الإجمالي',
-    topScore: 'أعلى مجموع نقاط 🥇',
+    topScore: 'أعلى مجموع نقاط',
     avgTotal: 'متوسط المجموع الكلي',
     ptsPer: 'نقطة / مشارك',
     avgR1: 'متوسط الجولة الأولى',
@@ -222,10 +229,10 @@ const T = {
     chart1: 'توزيع النقاط الكلية',
     chart2: 'متوسط النقاط لكل جولة',
     chart3: 'توزيع المشاركة حسب توليفات الجولات',
-    lb: '🏆 قائمة المتصدرين الكاملة',
+    lb: '<span class="icon"><i data-lucide="trophy" style="width:15px;height:15px;"></i></span> قائمة المتصدرين الكاملة',
     search: '🔍  ابحث بالاسم أو الرقم...',
     thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات',
-    bannerTitle: '📋 آخر نتائج مُسجَّلة',
+    bannerTitle: '<span class="icon"><i data-lucide="clipboard-list" style="width:14px;height:14px;"></i></span> آخر نتائج مُسجَّلة',
     footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم للأندية FIFA 2026',
     participant: 'مشارك',
     roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة'],
@@ -245,7 +252,7 @@ const T = {
     participants: 'registered employees',
     allRounds: 'Participated in all 3 rounds',
     pctTotal: '% of total',
-    topScore: 'Top Score 🥇',
+    topScore: 'Top Score',
     avgTotal: 'Average Total Score',
     ptsPer: 'pts / participant',
     avgR1: 'Round 1 Average',
@@ -257,10 +264,10 @@ const T = {
     chart1: 'Score Distribution',
     chart2: 'Average Points per Round',
     chart3: 'Participation by Round Combination',
-    lb: '🏆 Full Leaderboard',
+    lb: '<span class="icon"><i data-lucide="trophy" style="width:15px;height:15px;"></i></span> Full Leaderboard',
     search: '🔍  Search by name or ID...',
     thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds',
-    bannerTitle: '📋 Latest Results',
+    bannerTitle: '<span class="icon"><i data-lucide="clipboard-list" style="width:14px;height:14px;"></i></span> Latest Results',
     footer: 'SMI Mechanical — Internal Prediction League · FIFA Club World Cup 2026',
     participant: 'participants',
     roundLabels: ['Round 1','Round 2','Round 3'],
@@ -301,9 +308,16 @@ function applyLang() {
     o.textContent = o.dataset[lang] || o.textContent;
   });
   localStorage.setItem('dash_lang', lang);
+  // Update banner title icon
+  const bt = document.getElementById('b-title');
+  if(bt) bt.innerHTML = '<i data-lucide="clipboard-list" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:5px"></i> ' + t('bannerTitle');
+  // Update lb title
+  const lt = document.getElementById('lb-title');
+  if(lt) lt.innerHTML = '<i data-lucide="trophy" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-left:5px;margin-right:2px"></i> ' + t('lb');
   // Re-render data sections if already loaded
   if(lastStats) renderStats(lastStats);
   loadTable();
+  setTimeout(initIcons, 50);
 }
 
 function toggleLang() {
@@ -326,14 +340,14 @@ function renderStats(s) {
 
   document.getElementById('kpi-section').innerHTML = `
     <div class="kpi-grid">
-      <div class="kpi"><div class="lbl">👥 ${t('title').includes('مساب') ? 'إجمالي المشاركين' : 'Total Participants'}</div>
+      <div class="kpi"><div class="lbl"><i data-lucide="users" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('title').includes('مساب') ? 'إجمالي المشاركين' : 'Total Participants'}</div>
         <div class="val">${s.total_participants}</div><div class="sub">${t('participants')}</div></div>
-      <div class="kpi"><div class="lbl">🎯 ${t('allRounds')}</div>
+      <div class="kpi"><div class="lbl"><i data-lucide="target" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('allRounds')}</div>
         <div class="val" style="color:var(--r1)">${s.all3_participants}</div>
         <div class="sub">${Math.round(s.all3_participants/s.total_participants*100)}${t('pctTotal')}</div></div>
-      <div class="kpi accent"><div class="lbl">${t('topScore')}</div>
+      <div class="kpi accent"><div class="lbl"><i data-lucide="medal" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('topScore')}</div>
         <div class="val">${s.leader.total}</div><div class="sub">${s.leader.name}</div></div>
-      <div class="kpi"><div class="lbl">📊 ${t('avgTotal')}</div>
+      <div class="kpi"><div class="lbl"><i data-lucide="bar-chart-2" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('avgTotal')}</div>
         <div class="val">${s.avg_total}</div><div class="sub">${t('ptsPer')}</div></div>
     </div>`;
 
@@ -357,6 +371,7 @@ function renderStats(s) {
     </div>`;
 
   buildCharts(s);
+  setTimeout(initIcons, 0);
 }
 
 function buildCharts(s) {
@@ -408,6 +423,7 @@ async function loadRecentResults() {
   document.getElementById('banner').style.display='block';
   document.getElementById('banner-matches').innerHTML = done.map(m=>
     `<div class="match-chip">${m.match_name} — <span>${m.result}</span></div>`).join('');
+  setTimeout(initIcons, 0);
 }
 
 async function loadTable() {
@@ -440,6 +456,7 @@ async function loadTable() {
   }).join('');
 
   document.getElementById('pg-info').textContent = data.total+' '+t('participant');
+  setTimeout(initIcons, 0);
   renderPager(data.total, data.per_page);
 }
 
@@ -479,6 +496,7 @@ function showFlash(msg) {
   setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.remove(),400); },3500);
 }
 
+function initIcons(){ if(window.lucide) lucide.createIcons(); }
 async function init(){
   applyLang();
   await loadStats();
