@@ -41,12 +41,13 @@ def parse_db_url(url):
     """Parse postgresql://user:pass@host:port/dbname"""
     import urllib.parse
     r = urllib.parse.urlparse(url)
+    # urllib.parse automatically decodes percent-encoded characters
     return {
         "host": r.hostname,
         "port": r.port or 5432,
         "database": r.path.lstrip("/"),
-        "user": r.username,
-        "password": r.password,
+        "user": urllib.parse.unquote(r.username) if r.username else r.username,
+        "password": urllib.parse.unquote(r.password) if r.password else r.password,
         "ssl_context": True,
     }
 
