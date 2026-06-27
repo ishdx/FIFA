@@ -135,54 +135,54 @@ def seed_db(conn):
     match_options = data.get("match_options", {})
     participants = data["participants"]
 
-    # ── Bulk insert participants ──────────────────────────
-    p_vals = [(eid, info["name"], json.dumps(info["rounds"]))
-              for eid, info in participants.items()]
-    if p_vals:
-        placeholders = ",".join(f"(${i*3+1},${i*3+2},${i*3+3})" for i in range(len(p_vals)))
-        flat = [v for row in p_vals for v in row]
-        conn.run(f"INSERT INTO participants (emp_id,name,rounds) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
-    print(f"Inserted {len(p_vals)} participants")
+    print(f"Seeding {len(participants)} participants...")
 
-    # ── Bulk insert points_cache ──────────────────────────
-    pc_vals = [(eid,) for eid in participants]
-    if pc_vals:
-        placeholders = ",".join(f"(${i+1},0,0,0,0,0)" for i in range(len(pc_vals)))
-        flat = [v for row in pc_vals for v in row]
-        conn.run(f"INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
-    print(f"Inserted {len(pc_vals)} points_cache rows")
+    # ── Participants & points_cache (one statement each, all rows) ──
+    p_rows = [(eid, info["name"], json.dumps(info["rounds"]))
+               for eid, info in participants.items()]
 
-    # ── Bulk insert predictions (in chunks of 500) ────────
+    # Build single multi-row INSERT for participants
+    ph = ",".join(f"(${i*3+1},${i*3+2},${i*3+3})" for i in range(len(p_rows)))
+    flat = [v for row in p_rows for v in row]
+    conn.run(f"INSERT INTO participants (emp_id,name,rounds) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
+    print(f"  participants done: {len(p_rows)}")
+
+    # points_cache
+    ph2 = ",".join(f"(${i+1},0,0,0,0,0)" for i in range(len(p_rows)))
+    flat2 = [row[0] for row in p_rows]
+    conn.run(f"INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES {ph2} ON CONFLICT DO NOTHING", *flat2)
+    print(f"  points_cache done")
+
+    # ── Predictions in chunks of 200 ─────────────────────
     all_preds = []
     for eid, info in participants.items():
         for pred_key, pred_val in info["predictions"].items():
             rnd_str, match = pred_key.split(":", 1)
             all_preds.append((eid, int(rnd_str[1]), match, pred_val or ""))
 
-    chunk_size = 500
-    for i in range(0, len(all_preds), chunk_size):
-        chunk = all_preds[i:i+chunk_size]
-        placeholders = ",".join(f"(${j*4+1},${j*4+2},${j*4+3},${j*4+4})" for j in range(len(chunk)))
-        flat = [v for row in chunk for v in row]
-        conn.run(f"INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
-        print(f"Inserted predictions chunk {i//chunk_size+1} ({len(chunk)} rows)")
+    chunk = 200
+    for i in range(0, len(all_preds), chunk):
+        c = all_preds[i:i+chunk]
+        ph = ",".join(f"(${j*4+1},${j*4+2},${j*4+3},${j*4+4})" for j in range(len(c)))
+        flat = [v for row in c for v in row]
+        conn.run(f"INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
+    print(f"  predictions done: {len(all_preds)}")
 
-    # ── Bulk insert matches ───────────────────────────────
+    # ── Matches ───────────────────────────────────────────
     match_rows = []
     for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
         for match in data["matches"][key]:
             opts = json.dumps(match_options.get(f"{key}:{match}", []), ensure_ascii=False)
             match_rows.append((rnd, match, "pending", opts))
 
-    if match_rows:
-        placeholders = ",".join(f"(${i*4+1},${i*4+2},${i*4+3},${i*4+4})" for i in range(len(match_rows)))
-        flat = [v for row in match_rows for v in row]
-        conn.run(f"INSERT INTO matches (round,match_name,status,options) VALUES {placeholders} ON CONFLICT DO NOTHING", *flat)
-    print(f"Inserted {len(match_rows)} matches")
+    ph = ",".join(f"(${i*4+1},${i*4+2},${i*4+3},${i*4+4})" for i in range(len(match_rows)))
+    flat = [v for row in match_rows for v in row]
+    conn.run(f"INSERT INTO matches (round,match_name,status,options) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
+    print(f"  matches done: {len(match_rows)}")
 
-    print(f"Seeding complete: {len(participants)} participants, {len(match_rows)} matches — all points = 0.")
+    print(f"Seeding complete!")
 
-@app.on_event("startup")
+
 def startup():
     try:
         conn = get_conn()
@@ -407,24 +407,28 @@ async def reset_reseed(_=Depends(require_admin)):
     import threading
     def do_reset():
         try:
+            print("Dropping tables...")
             conn = get_conn()
             try:
                 conn.run("DROP TABLE IF EXISTS points_cache CASCADE")
                 conn.run("DROP TABLE IF EXISTS predictions CASCADE")
                 conn.run("DROP TABLE IF EXISTS matches CASCADE")
                 conn.run("DROP TABLE IF EXISTS participants CASCADE")
+                print("Tables dropped.")
             finally:
                 conn.close()
+            print("Re-initializing...")
             conn2 = get_conn()
             try:
                 init_db(conn2)
+                print("Tables created, seeding...")
                 seed_db(conn2)
                 print("Reset and reseed complete!")
             finally:
                 conn2.close()
         except Exception as e:
             traceback.print_exc()
-            print(f"Reset failed: {e}")
+            print(f"RESET FAILED: {e}")
     threading.Thread(target=do_reset, daemon=True).start()
     return {"status":"ok","message":"Reset started in background — check /api/health in 30s"}
 
