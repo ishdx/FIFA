@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional
-import psycopg2, json, os, secrets, asyncio, traceback
+import pg8000.native, json, os, secrets, asyncio, urllib.parse, traceback
 from datetime import datetime
 
 # ── SSE broadcaster ───────────────────────────────────────
@@ -43,17 +43,36 @@ ADMIN_PASS   = os.environ.get("ADMIN_PASS", "smi2026")
 
 # ── DB ────────────────────────────────────────────────────
 def get_conn():
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = True
-    return conn
+    r = urllib.parse.urlparse(DATABASE_URL)
+    return pg8000.native.Connection(
+        host=r.hostname,
+        port=r.port or 5432,
+        database=r.path.lstrip("/"),
+        user=urllib.parse.unquote(r.username or ""),
+        password=urllib.parse.unquote(r.password or ""),
+        ssl_context=True,
+    )
+
+def _esc(val):
+    """Escape a Python value for safe interpolation into a PostgreSQL query."""
+    if val is None:
+        return "NULL"
+    if isinstance(val, bool):
+        return "TRUE" if val else "FALSE"
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, float):
+        return repr(val)
+    # str / anything else: escape single quotes for PostgreSQL standard strings
+    return "'" + str(val).replace("'", "''") + "'"
 
 def db_run(conn, sql, *args):
-    """Run SQL, return list of row-tuples (empty list for non-SELECT)."""
-    with conn.cursor() as cur:
-        cur.execute(sql, args if args else None)
-        if cur.description is not None:
-            return cur.fetchall()
-        return []
+    """Execute SQL using pg8000 execute_simple (no extended protocol / bind params).
+    Use %s as placeholder; values are safely escaped and interpolated."""
+    if args:
+        parts = sql.split("%s")
+        sql = "".join(p + _esc(v) for p, v in zip(parts, args)) + parts[-1]
+    return conn.run(sql)   # len(params)==0 and stream is None → execute_simple
 
 def safe_run(conn, sql, *args):
     try:
@@ -143,20 +162,19 @@ def seed_db(conn):
     participants = data["participants"]
     print(f"Seeding {len(participants)} participants...")
 
-    conn.autocommit = False
-    cur = conn.cursor()
+    db_run(conn, "BEGIN")
     try:
         for eid, info in participants.items():
-            cur.execute(
+            db_run(conn,
                 "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                (eid, info["name"], json.dumps(info["rounds"])))
+                eid, info["name"], json.dumps(info["rounds"]))
 
         print("  participants done")
 
         for eid in participants:
-            cur.execute(
+            db_run(conn,
                 "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES (%s,0,0,0,0,0) ON CONFLICT DO NOTHING",
-                (eid,))
+                eid)
 
         print("  points_cache done")
 
@@ -164,9 +182,9 @@ def seed_db(conn):
         for eid, info in participants.items():
             for pred_key, pred_val in info["predictions"].items():
                 rnd_str, mname = pred_key.split(":", 1)
-                cur.execute(
+                db_run(conn,
                     "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                    (eid, int(rnd_str[1]), mname, pred_val or ""))
+                    eid, int(rnd_str[1]), mname, pred_val or "")
                 pred_count += 1
 
         print(f"  predictions done: {pred_count}")
@@ -174,21 +192,18 @@ def seed_db(conn):
         for rnd, key in [(1,"R1"),(2,"R2"),(3,"R3")]:
             for mname in data["matches"][key]:
                 opts = json.dumps(match_options.get(f"{key}:{mname}", []), ensure_ascii=False)
-                cur.execute(
+                db_run(conn,
                     "INSERT INTO matches (round,match_name,status,options) VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                    (rnd, mname, "pending", opts))
+                    rnd, mname, "pending", opts)
 
         print("  matches done")
-        conn.commit()
+        db_run(conn, "COMMIT")
         print(f"Seeding complete: {len(participants)} participants!")
 
     except Exception as e:
-        conn.rollback()
+        db_run(conn, "ROLLBACK")
         print(f"Seed failed, rolled back: {e}")
         raise
-    finally:
-        cur.close()
-        conn.autocommit = True
 
 
 def startup():
@@ -208,7 +223,7 @@ def startup():
 def health():
     try:
         conn = get_conn()
-        db_run(conn, "SELECT 1")
+        conn.run("SELECT 1")
         try:
             count = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
             matches = db_run(conn, "SELECT COUNT(*) FROM matches")[0][0]
@@ -458,8 +473,9 @@ def test_seed(_=Depends(require_admin)):
             match_options = data.get("match_options", {})
 
             first_id, first_info = next(iter(participants.items()))
-            db_run(conn, "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                   first_id, first_info["name"], json.dumps(first_info["rounds"]))
+            db_run(conn,
+                "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+                first_id, first_info["name"], json.dumps(first_info["rounds"]))
             check = db_run(conn, "SELECT COUNT(*) FROM participants")[0][0]
 
             return {
