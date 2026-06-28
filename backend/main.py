@@ -691,15 +691,29 @@ def export_excel(_=Depends(require_admin)):
 
 @app.get("/api/admin/export/pdf")
 def export_pdf(_=Depends(require_admin)):
-    """Export full leaderboard as PDF file."""
+    """Export full leaderboard as PDF with proper Arabic text support."""
     try:
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib import colors
         from reportlab.lib.units import mm
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import ParagraphStyle
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+
+        # Register Arabic font
+        font_path = os.path.join(os.path.dirname(__file__), "fonts", "Amiri-Regular.ttf")
+        pdfmetrics.registerFont(TTFont('Amiri', font_path))
+
+        def ar(text):
+            """Reshape and reorder Arabic text for correct PDF rendering."""
+            try:
+                reshaped = arabic_reshaper.reshape(str(text))
+                return get_display(reshaped)
+            except:
+                return str(text)
 
         conn = get_conn()
         try:
@@ -720,7 +734,6 @@ def export_pdf(_=Depends(require_admin)):
                                 rightMargin=15*mm, leftMargin=15*mm,
                                 topMargin=15*mm, bottomMargin=15*mm)
 
-        styles = getSampleStyleSheet()
         title_style = ParagraphStyle('title', fontSize=16, fontName='Helvetica-Bold',
                                      textColor=colors.HexColor('#1A1A1A'), spaceAfter=4)
         sub_style = ParagraphStyle('sub', fontSize=10, fontName='Helvetica',
@@ -733,15 +746,16 @@ def export_pdf(_=Depends(require_admin)):
             sub_style))
         elements.append(Spacer(1, 4*mm))
 
-        # Table data
         col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'Bonus', 'Total']
         table_data = [col_headers]
         for rank, row in enumerate(rows, 1):
             emp_id, name, rounds_json, r1, r2, r3, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
             rounds_str = '+'.join([f'R{r}' for r in sorted(rounds)])
+            # Apply Arabic reshaping to name
+            display_name = ar(name)
             table_data.append([
-                str(rank), str(emp_id), str(name), rounds_str,
+                str(rank), str(emp_id), display_name, rounds_str,
                 str(int(r1)), str(int(r2)), str(int(r3)),
                 str(int(bonus)), str(int(total))
             ])
@@ -752,7 +766,6 @@ def export_pdf(_=Depends(require_admin)):
         gold   = colors.HexColor('#FFD700')
         silver = colors.HexColor('#C0C0C0')
         bronze = colors.HexColor('#CD7F32')
-        red    = colors.HexColor('#E01428')
         dark   = colors.HexColor('#1A1A1A')
         light  = colors.HexColor('#F5F5F5')
         peach  = colors.HexColor('#FCE4D6')
@@ -763,33 +776,30 @@ def export_pdf(_=Depends(require_admin)):
             ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
             ('FONTSIZE',   (0,0), (-1,0), 9),
             ('ALIGN',      (0,0), (-1,-1), 'CENTER'),
-            ('ALIGN',      (2,1), (2,-1), 'LEFT'),
+            ('FONTNAME',   (2,1), (2,-1), 'Amiri'),   # Arabic font for names
+            ('FONTSIZE',   (2,1), (2,-1), 9),
+            ('ALIGN',      (2,1), (2,-1), 'RIGHT'),   # RTL alignment for names
             ('FONTSIZE',   (0,1), (-1,-1), 8),
             ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light]),
             ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#CCCCCC')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('TOPPADDING', (0,0), (-1,-1), 4),
             ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            # Total column highlight
             ('BACKGROUND', (8,1), (8,-1), peach),
             ('FONTNAME',   (8,1), (8,-1), 'Helvetica-Bold'),
         ]
-        # Medal rows
         if len(table_data) > 1: style_cmds.append(('BACKGROUND', (0,1), (-1,1), gold))
         if len(table_data) > 2: style_cmds.append(('BACKGROUND', (0,2), (-1,2), silver))
         if len(table_data) > 3: style_cmds.append(('BACKGROUND', (0,3), (-1,3), bronze))
 
         t.setStyle(TableStyle(style_cmds))
         elements.append(t)
-
         doc.build(elements)
         buf.seek(0)
+
         fname = f"SMI_FIFA2026_Leaderboard_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.pdf"
-        return StreamingResponse(
-            buf,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{fname}"'}
-        )
+        return StreamingResponse(buf, media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'})
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, str(e))

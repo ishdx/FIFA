@@ -4,3 +4,5 @@ python-multipart==0.0.9
 pg8000==1.31.2
 openpyxl==3.1.2
 reportlab==4.2.2
+arabic-reshaper==3.0.0
+python-bidi==0.4.2
