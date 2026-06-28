@@ -111,6 +111,7 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
     <button class="btn btn-red" onclick="recalcPoints()">🔄 إعادة حساب النقاط</button>
     <button class="btn btn-green" onclick="exportFile('excel')">📊 تصدير Excel</button>
     <button class="btn btn-gray" onclick="exportFile('pdf')">📄 تصدير PDF</button>
+    <button class="btn" style="background:#7B1FA2;color:#fff" onclick="addRound4()" id="r4-btn">➕ إضافة دور الـ32</button>
     <span id="recalc-msg" style="font-size:13px;color:var(--green);align-self:center"></span>
   </div>
 
@@ -125,6 +126,7 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
       <button onclick="filterMatches('1',this)">الجولة 1</button>
       <button onclick="filterMatches('2',this)">الجولة 2</button>
       <button onclick="filterMatches('3',this)">الجولة 3</button>
+      <button onclick="filterMatches('4',this)">دور الـ32</button>
       <button onclick="filterMatches('done',this)">مكتملة ✅</button>
       <button onclick="filterMatches('pending',this)">منتظرة ⏳</button>
     </div>
@@ -410,6 +412,28 @@ async function exportFile(type) {
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
+  }
+}
+
+async function addRound4() {
+  const btn = document.getElementById('r4-btn');
+  if (!confirm('هل تريد إضافة بيانات دور الـ32؟ لن يتم حذف أي بيانات موجودة.')) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري الإضافة...';
+  const res = await fetch(API + '/api/admin/add-round4', {
+    method: 'POST',
+    headers: authHeaders()
+  });
+  const data = await res.json();
+  if (res.ok) {
+    const s = data.stats;
+    showToast(`✅ تم! مشاركون جدد: ${s.new_participants} | توقعات: ${s.predictions_added} | مباريات: ${s.matches_added}`);
+    btn.textContent = '✅ تم إضافة دور الـ32';
+    await loadAll();
+  } else {
+    showToast('خطأ: ' + (data.detail || 'فشلت العملية'), true);
+    btn.disabled = false;
+    btn.textContent = '➕ إضافة دور الـ32';
   }
 }
 </script>

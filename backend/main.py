@@ -110,14 +110,14 @@ def recalc_all_points(conn):
         emp_id = row[0]
         preds = safe_run(conn,
             "SELECT round, match_name, prediction FROM predictions WHERE emp_id=%s", emp_id)
-        pts = {1: 0.0, 2: 0.0, 3: 0.0}
+        pts = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
         for pr in preds:
             key = (pr[0], pr[1])
             if key in results and pr[2] and check_pred(pr[2], results[key]):
                 pts[pr[0]] += 3.0
         bonus_row = safe_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=%s", emp_id)
         bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
-        total = pts[1] + pts[2] + pts[3] + bonus_pts
+        total = pts[1] + pts[2] + pts[3] + pts[4] + bonus_pts
         safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total)
                     VALUES (%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (emp_id) DO UPDATE SET
@@ -804,6 +804,86 @@ def export_pdf(_=Depends(require_admin)):
         traceback.print_exc()
         raise HTTPException(500, str(e))
 
+
+
+@app.post("/api/admin/add-round4")
+def add_round4(_=Depends(require_admin)):
+    """
+    One-time migration: Add Round of 32 (R4) predictions and matches.
+    Safe — does NOT touch existing participants, points, or match results.
+    """
+    import urllib.request as _req
+    seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "r4_data.json")
+    if not os.path.exists(seed_path):
+        raise HTTPException(404, "r4_data.json not found in data/ folder")
+
+    with open(seed_path, encoding="utf-8") as f:
+        r4 = json.load(f)
+
+    conn = get_conn()
+    try:
+        stats = {"new_participants": 0, "predictions_added": 0, "matches_added": 0, "rounds_updated": 0}
+
+        # 1. Add new participants (10 new employees) — skip existing
+        for emp_id, info in r4["participants"].items():
+            existing = db_run(conn, "SELECT emp_id FROM participants WHERE emp_id=%s", emp_id)
+            if not existing:
+                db_run(conn,
+                    "INSERT INTO participants (emp_id, name, rounds) VALUES (%s,%s,%s)",
+                    emp_id, info["name"], json.dumps([4]))
+                db_run(conn,
+                    "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES (%s,0,0,0,0,0) ON CONFLICT DO NOTHING",
+                    emp_id)
+                stats["new_participants"] += 1
+            else:
+                # Update rounds list to include 4
+                rounds_row = db_run(conn, "SELECT rounds FROM participants WHERE emp_id=%s", emp_id)
+                rounds = json.loads(rounds_row[0][0]) if rounds_row else []
+                if 4 not in rounds:
+                    rounds.append(4)
+                    db_run(conn, "UPDATE participants SET rounds=%s WHERE emp_id=%s",
+                           json.dumps(sorted(rounds)), emp_id)
+                    stats["rounds_updated"] += 1
+
+        # 2. Add R4 predictions — skip if already exists
+        for emp_id, info in r4["participants"].items():
+            for match_name, pred_val in info["predictions"].items():
+                existing = db_run(conn,
+                    "SELECT emp_id FROM predictions WHERE emp_id=%s AND round=4 AND match_name=%s",
+                    emp_id, match_name)
+                if not existing:
+                    db_run(conn,
+                        "INSERT INTO predictions (emp_id, round, match_name, prediction) VALUES (%s,4,%s,%s)",
+                        emp_id, match_name, pred_val or "")
+                    stats["predictions_added"] += 1
+
+        # 3. Add R4 matches — skip if already exists
+        for match_name in r4["matches"]:
+            opts = r4["options"].get(match_name, [])
+            existing = db_run(conn, "SELECT id FROM matches WHERE round=4 AND match_name=%s", match_name)
+            if not existing:
+                db_run(conn,
+                    "INSERT INTO matches (round, match_name, status, options) VALUES (4,%s,'pending',%s)",
+                    match_name, json.dumps(opts, ensure_ascii=False))
+                stats["matches_added"] += 1
+
+        # 4. Add r4_pts column to points_cache if not exists
+        try:
+            db_run(conn, "ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS r4_pts REAL DEFAULT 0")
+        except Exception:
+            pass
+
+        # Recalculate total for all (in case r4_pts column just added)
+        db_run(conn, """UPDATE points_cache SET
+            total = COALESCE(r1_pts,0) + COALESCE(r2_pts,0) + COALESCE(r3_pts,0) +
+                    COALESCE(r4_pts,0) + COALESCE(bonus_pts,0)""")
+
+        return {"status": "ok", "stats": stats}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+    finally:
+        conn.close()
 
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
