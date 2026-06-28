@@ -247,6 +247,7 @@ def get_stats():
         r1c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=1") or [[0]])[0][0]
         r2c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2") or [[0]])[0][0]
         r3c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3") or [[0]])[0][0]
+        r4c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=4") or [[0]])[0][0]
         all3    = (safe_run(conn, "SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)=3) x") or [[0]])[0][0]
         top     = safe_run(conn, "SELECT emp_id,r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache ORDER BY total DESC LIMIT 1") or []
         avg_row = safe_run(conn, "SELECT AVG(total),AVG(r1_pts),AVG(r2_pts),AVG(r3_pts) FROM points_cache") or [[0,0,0,0]]
@@ -288,6 +289,8 @@ def get_stats():
                 "avg_total":round(float(avg[0] or 0),1),"avg_r1":round(float(avg[1] or 0),1),
                 "avg_r2":round(float(avg[2] or 0),1),"avg_r3":round(float(avg[3] or 0),1),
                 "min_total":float(mn or 0),"matches_done":done,"matches_pending":pending,
+                "r4_participants":r4c,
+                "avg_r4":round(float((safe_run(conn,"SELECT AVG(COALESCE(r4_pts,0)) FROM points_cache WHERE emp_id IN (SELECT DISTINCT emp_id FROM predictions WHERE round=4)") or [[0]])[0][0] or 0),1),
                 "combos":combos,"dist_labels":bl,"dist_values":dist}
     finally:
         conn.close()
@@ -306,12 +309,13 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
             if round_filter=="r1" and 1 not in rounds: continue
             if round_filter=="r2" and 2 not in rounds: continue
             if round_filter=="r3" and 3 not in rounds: continue
+            if round_filter=="r4" and 4 not in rounds: continue
             if round_filter=="all3" and not all(x in rounds for x in [1,2,3]): continue
             if search and search.lower() not in r[1].lower() and search not in r[0]: continue
             results.append({"rank":len(results)+1,"emp_id":r[0],"name":r[1],
                             "r1":float(r[2]),"r2":float(r[3]),"r3":float(r[4]),
-                            "bonus":float(r[5]),"total":float(r[6]),
-                            "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds})
+                            "r4":float(r[5]),"bonus":float(r[6]),"total":float(r[7]),
+                            "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds,"p4":4 in rounds})
         start=(page-1)*per_page
         return {"data":results[start:start+per_page],"total":len(results),"page":page,"per_page":per_page}
     finally:

@@ -182,6 +182,7 @@ tr:hover td{background:var(--surface2)}
         <option value="r2" data-ar="شارك في ج2" data-en="Round 2">شارك في ج2</option>
         <option value="r3" data-ar="شارك في ج3" data-en="Round 3">شارك في ج3</option>
         <option value="all3" data-ar="شارك في الثلاث" data-en="All 3 Rounds">شارك في الثلاث</option>
+        <option value="r4" data-ar="شارك في دور الـ32" data-en="Round of 32">شارك في دور الـ32</option>
       </select>
       <span class="pg-info" id="pg-info"></span>
     </div>
@@ -193,6 +194,7 @@ tr:hover td{background:var(--surface2)}
         <th style="width:46px;text-align:center;color:var(--r1)">ج1</th>
         <th style="width:46px;text-align:center;color:var(--r2)">ج2</th>
         <th style="width:46px;text-align:center;color:var(--r3)">ج3</th>
+        <th style="width:46px;text-align:center;color:#7B1FA2">R32</th>
         <th style="width:130px" id="th-total">المجموع</th>
         <th style="width:55px;text-align:center" id="th-rounds">الجولات</th>
       </tr></thead>
@@ -217,7 +219,7 @@ const T = {
   ar: {
     title: 'مسابقة دوري التوقعات',
     sub: 'كأس العالم FIFA 2026',
-    badge: 'الجولة 3 — جارية',
+    badge: 'دور الـ32 — جاري',
     loading: 'جاري التحميل...',
     progress: 'تقدم البطولة',
     matches: 'مباراة',
@@ -227,12 +229,14 @@ const T = {
     topScore: 'أعلى مجموع نقاط',
     avgTotal: 'متوسط إجمالي النقاط',
     ptsPer: 'نقطة / مشارك',
+    avgR4: 'متوسط نقاط دور الـ32',
     avgR1: 'متوسط نقاط الجولة الأولى',
     avgR2: 'متوسط نقاط الجولة الثانية',
     avgR3: 'متوسط نقاط الجولة الثالثة',
     minPts: 'أقل مجموع نقاط',
     r1Part: 'مشاركو ج1', r2Part: 'مشاركو ج2', r3Part: 'مشاركو ج3',
-    r1only: 'ج1 فقط', r2only: 'ج2 فقط', r3only: 'ج3 فقط',
+    r4Part: 'مشاركو دور الـ32',
+    r1only: 'ج1 فقط', r2only: 'ج2 فقط', r3only: 'ج3 فقط', r4only: 'دور الـ32 فقط',
     chart1: 'توزيع المشاركين حسب إجمالي النقاط',
     chart2: 'متوسط نقاط الجولة',
     chart3: 'توزيع المشاركين حسب الجولات',
@@ -242,7 +246,7 @@ const T = {
     bannerTitle: 'آخر نتائج مُسجَّلة',
     footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم FIFA 2026',
     participant: 'مشارك',
-    roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة'],
+    roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة','دور الـ32'],
     comboLabels: ['الثلاث','ج1+ج2','ج1+ج3','ج2+ج3','ج1 فقط','ج2 فقط','ج3 فقط'],
     tooltipRange: 'نطاق: ', tooltipPart: ' مشارك', tooltipPts: ' نقطة',
     updated: 'آخر تحديث: ',
@@ -252,7 +256,7 @@ const T = {
   en: {
     title: 'Prediction League',
     sub: 'FIFA World Cup 2026',
-    badge: 'Round 3 — Active',
+    badge: 'Round of 32 — Active',
     loading: 'Loading...',
     progress: 'Tournament Progress',
     matches: 'matches',
@@ -262,12 +266,14 @@ const T = {
     topScore: 'Top Score',
     avgTotal: 'Average Total Points',
     ptsPer: 'pts / participant',
+    avgR4: 'Average Points – Round of 32',
     avgR1: 'Average Points – Round 1',
     avgR2: 'Average Points – Round 2',
     avgR3: 'Average Points – Round 3',
     minPts: 'Lowest Score',
     r1Part: 'R1 Participants', r2Part: 'R2 Participants', r3Part: 'R3 Participants',
-    r1only: 'R1 Only', r2only: 'R2 Only', r3only: 'R3 Only',
+    r4Part: 'R32 Participants',
+    r1only: 'R1 Only', r2only: 'R2 Only', r3only: 'R3 Only', r4only: 'R32 Only',
     chart1: 'Participant Distribution by Total Points',
     chart2: 'Average Points per Round',
     chart3: 'Participant Distribution by Rounds Participated',
@@ -277,7 +283,7 @@ const T = {
     bannerTitle: 'Latest Results',
     footer: 'SMI Mechanical — Internal Prediction League · FIFA World Cup 2026',
     participant: 'participants',
-    roundLabels: ['Round 1','Round 2','Round 3'],
+    roundLabels: ['Round 1','Round 2','Round 3','R. of 32'],
     comboLabels: ['All 3','R1+R2','R1+R3','R2+R3','R1 Only','R2 Only','R3 Only'],
     tooltipRange: 'Range: ', tooltipPart: ' participants', tooltipPts: ' pts',
     updated: 'Last updated: ',
@@ -358,22 +364,21 @@ function renderStats(s) {
     </div>`;
 
   document.getElementById('avg-section').innerHTML = `
-    <div class="avg-row">
+    <div class="avg-row" style="grid-template-columns:repeat(5,1fr)">
       <div class="avg-pill"><div class="albl">${t('avgR1')}</div><div class="aval" style="color:var(--r1)">${s.avg_r1}</div></div>
       <div class="avg-pill"><div class="albl">${t('avgR2')}</div><div class="aval" style="color:var(--r2)">${s.avg_r2}</div></div>
       <div class="avg-pill"><div class="albl">${t('avgR3')}</div><div class="aval" style="color:var(--r3)">${s.avg_r3}</div></div>
+      <div class="avg-pill"><div class="albl">${t('avgR4')}</div><div class="aval" style="color:#7B1FA2">${s.avg_r4||0}</div></div>
       <div class="avg-pill"><div class="albl">${t('minPts')}</div><div class="aval" style="color:var(--text2)">${s.min_total}</div></div>
     </div>`;
 
   const c = s.combos;
   document.getElementById('part-section').innerHTML = `
-    <div class="part-grid">
+    <div class="part-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="part-card"><div class="pnum" style="color:var(--r1)">${s.r1_participants}</div><div class="pdesc">${t('r1Part')}</div></div>
       <div class="part-card"><div class="pnum" style="color:var(--r2)">${s.r2_participants}</div><div class="pdesc">${t('r2Part')}</div></div>
       <div class="part-card"><div class="pnum" style="color:var(--r3)">${s.r3_participants}</div><div class="pdesc">${t('r3Part')}</div></div>
-      <div class="part-card"><div class="pnum">${c.r1only}</div><div class="pdesc">${t('r1only')}</div></div>
-      <div class="part-card"><div class="pnum">${c.r2only}</div><div class="pdesc">${t('r2only')}</div></div>
-      <div class="part-card"><div class="pnum">${c.r3only}</div><div class="pdesc">${t('r3only')}</div></div>
+      <div class="part-card"><div class="pnum" style="color:#7B1FA2">${s.r4_participants||0}</div><div class="pdesc">${t('r4Part')}</div></div>
     </div>`;
 
   buildCharts(s);
@@ -401,8 +406,8 @@ function buildCharts(s) {
   if(roundChart) roundChart.destroy();
   roundChart = new Chart(document.getElementById('roundChart'),{
     type:'bar',
-    data:{labels:t('roundLabels'),datasets:[{data:[s.avg_r1,s.avg_r2,s.avg_r3],
-      backgroundColor:['#1565C0','#2E7D32','#E01428'],borderWidth:0,borderRadius:6}]},
+    data:{labels:t('roundLabels'),datasets:[{data:[s.avg_r1,s.avg_r2,s.avg_r3,s.avg_r4||0],
+      backgroundColor:['#1565C0','#2E7D32','#E01428','#7B1FA2'],borderWidth:0,borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw.toFixed(1)+t('tooltipPts')}}},
       scales:{x:{ticks:{font:{size:11},color:tick},grid:{display:false}},
@@ -444,7 +449,7 @@ async function loadTable() {
   document.getElementById('lb-body').innerHTML = data.data.map((p,idx)=>{
     const seqRank = (page-1)*20 + idx + 1;
     const pct=Math.round((p.total/maxPts)*100);
-    const dots=[p.p1,p.p2,p.p3].map(v=>`<div class="dot ${v?'dot-on':'dot-off'}"></div>`).join('');
+    const dots=[p.p1,p.p2,p.p3,p.p4].map(v=>`<div class="dot ${v?'dot-on':'dot-off'}"></div>`).join('');
     const cls=medal[seqRank]||'rnb';
     return `<tr>
       <td style="text-align:center"><span class="rnk ${cls}">${seqRank}</span></td>
@@ -453,6 +458,7 @@ async function loadTable() {
       <td style="text-align:center;color:var(--r1);font-weight:500">${p.p1?p.r1:'—'}</td>
       <td style="text-align:center;color:var(--r2);font-weight:500">${p.p2?p.r2:'—'}</td>
       <td style="text-align:center;color:var(--r3);font-weight:500">${p.p3?p.r3:'—'}</td>
+      <td style="text-align:center;color:#7B1FA2;font-weight:500">${p.p4?p.r4:'—'}</td>
       <td><div class="bar-w">
         <span style="font-weight:700;font-size:14px;min-width:32px">${p.total}</span>
         <div class="bar-bg"><div class="bar-f" style="width:${pct}%"></div></div>
