@@ -300,12 +300,12 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
     conn = get_conn()
     try:
         rows = db_run(conn, """SELECT pc.emp_id,p.name,pc.r1_pts,pc.r2_pts,pc.r3_pts,
-                           COALESCE(pc.bonus_pts,0),pc.total,p.rounds
+                           COALESCE(pc.r4_pts,0),COALESCE(pc.bonus_pts,0),pc.total,p.rounds
                            FROM points_cache pc JOIN participants p ON pc.emp_id=p.emp_id
                            ORDER BY pc.total DESC, p.name ASC""")
         results = []
         for r in rows:
-            rounds = json.loads(r[7])
+            rounds = json.loads(r[8])
             if round_filter=="r1" and 1 not in rounds: continue
             if round_filter=="r2" and 2 not in rounds: continue
             if round_filter=="r3" and 3 not in rounds: continue

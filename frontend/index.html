@@ -247,7 +247,7 @@ const T = {
     footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم FIFA 2026',
     participant: 'مشارك',
     roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة','دور الـ32'],
-    comboLabels: ['الثلاث','ج1+ج2','ج1+ج3','ج2+ج3','ج1 فقط','ج2 فقط','ج3 فقط'],
+    comboLabels: ['الثلاث','ج1+ج2','ج1+ج3','ج2+ج3','ج1 فقط','ج2 فقط','ج3 فقط','دور الـ32'],
     tooltipRange: 'نطاق: ', tooltipPart: ' مشارك', tooltipPts: ' نقطة',
     updated: 'آخر تحديث: ',
     flashUpdate: '✅ New Result: ',
@@ -284,7 +284,7 @@ const T = {
     footer: 'SMI Mechanical — Internal Prediction League · FIFA World Cup 2026',
     participant: 'participants',
     roundLabels: ['Round 1','Round 2','Round 3','R. of 32'],
-    comboLabels: ['All 3','R1+R2','R1+R3','R2+R3','R1 Only','R2 Only','R3 Only'],
+    comboLabels: ['All 3','R1+R2','R1+R3','R2+R3','R1 Only','R2 Only','R3 Only','R. of 32'],
     tooltipRange: 'Range: ', tooltipPart: ' participants', tooltipPts: ' pts',
     updated: 'Last updated: ',
     flashUpdate: '✅ New Result: ',
@@ -417,8 +417,8 @@ function buildCharts(s) {
   partChart = new Chart(document.getElementById('partChart'),{
     type:'bar',
     data:{labels:t('comboLabels'),datasets:[{
-      data:[c.all3,c.r1r2,c.r1r3,c.r2r3,c.r1only,c.r2only,c.r3only],
-      backgroundColor:['#1A1A1A','#1565C0','#0277BD','#2E7D32','#66BB6A','#8BC34A','#E01428'],
+      data:[c.all3,c.r1r2,c.r1r3,c.r2r3,c.r1only,c.r2only,c.r3only,s.r4_participants||0],
+      backgroundColor:['#1A1A1A','#1565C0','#0277BD','#2E7D32','#66BB6A','#8BC34A','#E01428','#7B1FA2'],
       borderWidth:0,borderRadius:4}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+t('tooltipPart')}}},
