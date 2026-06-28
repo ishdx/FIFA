@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import Optional
-import pg8000.native, json, os, secrets, asyncio, urllib.parse, traceback
+import pg8000.native, json, os, secrets, asyncio, urllib.parse, traceback, io
 from datetime import datetime
 
 # ── SSE broadcaster ───────────────────────────────────────
@@ -605,6 +605,195 @@ def recalculate_points(_=Depends(require_admin)):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, str(e))
+
+@app.get("/api/admin/export/excel")
+def export_excel(_=Depends(require_admin)):
+    """Export full leaderboard as Excel file."""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        conn = get_conn()
+        try:
+            rows = db_run(conn, """
+                SELECT pc.emp_id, p.name, p.rounds,
+                       pc.r1_pts, pc.r2_pts, pc.r3_pts,
+                       COALESCE(pc.bonus_pts,0), pc.total
+                FROM points_cache pc
+                JOIN participants p ON pc.emp_id=p.emp_id
+                ORDER BY pc.total DESC, p.name ASC
+            """)
+        finally:
+            conn.close()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Leaderboard"
+
+        # Styles
+        def fill(hex6):
+            return PatternFill('solid', fgColor='FF'+hex6)
+        def hfont():
+            return Font(name='Arial', bold=True, color='FFFFFFFF', size=10)
+        def cfont(bold=False):
+            return Font(name='Arial', bold=bold, size=10)
+        def border():
+            s = Side(style='thin', color='FFCCCCCC')
+            return Border(left=s, right=s, top=s, bottom=s)
+
+        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'Bonus Points', 'Total']
+        widths  = [5, 14, 32, 10, 11, 11, 11, 13, 10]
+
+        # Header row
+        for ci, (h, w) in enumerate(zip(headers, widths), 1):
+            c = ws.cell(row=1, column=ci, value=h)
+            c.fill = fill('1A1A1A')
+            c.font = hfont()
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            c.border = border()
+            ws.column_dimensions[get_column_letter(ci)].width = w
+        ws.row_dimensions[1].height = 20
+
+        # Data rows
+        for rank, row in enumerate(rows, 1):
+            emp_id, name, rounds_json, r1, r2, r3, bonus, total = row
+            rounds = json.loads(rounds_json) if rounds_json else []
+            rounds_str = '+'.join([f'R{r}' for r in sorted(rounds)])
+            er = rank + 1
+            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(bonus), float(total)]
+            medal = {1:'FFD700', 2:'C0C0C0', 3:'CD7F32'}
+            for ci, val in enumerate(data, 1):
+                c = ws.cell(row=er, column=ci, value=val)
+                c.font = cfont(bold=(ci==9))
+                c.border = border()
+                c.alignment = Alignment(horizontal='center' if ci!=3 else 'left', vertical='center')
+                if rank in medal:
+                    c.fill = fill(medal[rank])
+                elif er % 2 == 0:
+                    c.fill = fill('F5F5F5')
+                if ci == 9:
+                    c.fill = fill('FCE4D6')
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        fname = f"SMI_FIFA2026_Leaderboard_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+        )
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/admin/export/pdf")
+def export_pdf(_=Depends(require_admin)):
+    """Export full leaderboard as PDF file."""
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        conn = get_conn()
+        try:
+            rows = db_run(conn, """
+                SELECT pc.emp_id, p.name, p.rounds,
+                       pc.r1_pts, pc.r2_pts, pc.r3_pts,
+                       COALESCE(pc.bonus_pts,0), pc.total
+                FROM points_cache pc
+                JOIN participants p ON pc.emp_id=p.emp_id
+                ORDER BY pc.total DESC, p.name ASC
+            """)
+            done = db_run(conn, "SELECT COUNT(*) FROM matches WHERE status='done'")[0][0]
+        finally:
+            conn.close()
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                                rightMargin=15*mm, leftMargin=15*mm,
+                                topMargin=15*mm, bottomMargin=15*mm)
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('title', fontSize=16, fontName='Helvetica-Bold',
+                                     textColor=colors.HexColor('#1A1A1A'), spaceAfter=4)
+        sub_style = ParagraphStyle('sub', fontSize=10, fontName='Helvetica',
+                                   textColor=colors.HexColor('#666666'), spaceAfter=12)
+
+        elements = []
+        elements.append(Paragraph("SMI Mechanical — FIFA World Cup 2026", title_style))
+        elements.append(Paragraph(
+            f"Prediction League Leaderboard  |  Generated: {datetime.utcnow().strftime('%d %b %Y %H:%M')} UTC  |  Matches played: {done}/104",
+            sub_style))
+        elements.append(Spacer(1, 4*mm))
+
+        # Table data
+        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'Bonus', 'Total']
+        table_data = [col_headers]
+        for rank, row in enumerate(rows, 1):
+            emp_id, name, rounds_json, r1, r2, r3, bonus, total = row
+            rounds = json.loads(rounds_json) if rounds_json else []
+            rounds_str = '+'.join([f'R{r}' for r in sorted(rounds)])
+            table_data.append([
+                str(rank), str(emp_id), str(name), rounds_str,
+                str(int(r1)), str(int(r2)), str(int(r3)),
+                str(int(bonus)), str(int(total))
+            ])
+
+        col_widths = [12*mm, 20*mm, 72*mm, 20*mm, 16*mm, 16*mm, 16*mm, 18*mm, 18*mm]
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+        gold   = colors.HexColor('#FFD700')
+        silver = colors.HexColor('#C0C0C0')
+        bronze = colors.HexColor('#CD7F32')
+        red    = colors.HexColor('#E01428')
+        dark   = colors.HexColor('#1A1A1A')
+        light  = colors.HexColor('#F5F5F5')
+        peach  = colors.HexColor('#FCE4D6')
+
+        style_cmds = [
+            ('BACKGROUND', (0,0), (-1,0), dark),
+            ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
+            ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE',   (0,0), (-1,0), 9),
+            ('ALIGN',      (0,0), (-1,-1), 'CENTER'),
+            ('ALIGN',      (2,1), (2,-1), 'LEFT'),
+            ('FONTSIZE',   (0,1), (-1,-1), 8),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light]),
+            ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#CCCCCC')),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            # Total column highlight
+            ('BACKGROUND', (8,1), (8,-1), peach),
+            ('FONTNAME',   (8,1), (8,-1), 'Helvetica-Bold'),
+        ]
+        # Medal rows
+        if len(table_data) > 1: style_cmds.append(('BACKGROUND', (0,1), (-1,1), gold))
+        if len(table_data) > 2: style_cmds.append(('BACKGROUND', (0,2), (-1,2), silver))
+        if len(table_data) > 3: style_cmds.append(('BACKGROUND', (0,3), (-1,3), bronze))
+
+        t.setStyle(TableStyle(style_cmds))
+        elements.append(t)
+
+        doc.build(elements)
+        buf.seek(0)
+        fname = f"SMI_FIFA2026_Leaderboard_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.pdf"
+        return StreamingResponse(
+            buf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+        )
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+
 
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")

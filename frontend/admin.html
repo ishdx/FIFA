@@ -107,8 +107,10 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
 <div id="admin-dashboard" style="display:none">
 
   <div class="stats-strip" id="stats-strip"></div>
-  <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap">
+  <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-red" onclick="recalcPoints()">🔄 إعادة حساب النقاط</button>
+    <button class="btn btn-green" onclick="exportFile('excel')">📊 تصدير Excel</button>
+    <button class="btn btn-gray" onclick="exportFile('pdf')">📄 تصدير PDF</button>
     <span id="recalc-msg" style="font-size:13px;color:var(--green);align-self:center"></span>
   </div>
 
@@ -379,6 +381,36 @@ async function recalcPoints() {
   }
   btn.disabled = false;
   btn.textContent = '🔄 إعادة حساب النقاط';
+}
+
+async function exportFile(type) {
+  const btn = event.target;
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ جاري التصدير...';
+  try {
+    const res = await fetch(API + '/api/admin/export/' + type, {
+      headers: { 'X-Admin-Token': AUTH_TOKEN }
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      showToast('خطأ: ' + (err.detail || 'فشل التصدير'), true);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const cd = res.headers.get('Content-Disposition') || '';
+    const fname = cd.match(/filename="([^"]+)"/)?.[1] || ('leaderboard.' + type);
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('✅ تم التصدير بنجاح: ' + fname);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 }
 </script>
 </body>
