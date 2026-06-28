@@ -441,7 +441,7 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
         p = db_run(conn, "SELECT emp_id,name,rounds FROM participants WHERE emp_id=%s", emp_id)
         if not p: raise HTTPException(404,"Participant not found")
         preds = db_run(conn, "SELECT round,match_name,prediction FROM predictions WHERE emp_id=%s ORDER BY round", emp_id)
-        pts = db_run(conn, "SELECT r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=%s", emp_id)
+        pts = db_run(conn, "SELECT r1_pts,r2_pts,r3_pts,COALESCE(r4_pts,0),COALESCE(bonus_pts,0),total FROM points_cache WHERE emp_id=%s", emp_id)
         match_res = db_run(conn, "SELECT round,match_name,result FROM matches WHERE status='done'")
         mr = {(r[0],r[1]):r[2] for r in match_res}
         pred_detail = []
@@ -450,11 +450,12 @@ def get_participant_detail(emp_id: str, _=Depends(require_admin)):
             correct = check_pred(pr[2], res) if res else None
             pred_detail.append({"round":pr[0],"match":pr[1],"prediction":pr[2],
                                  "result":res,"correct":correct,"points":3 if correct else 0})
-        pts_row = pts[0] if pts else (0,0,0,0,0)
+        pts_row = pts[0] if pts else (0,0,0,0,0,0)
         return {"emp_id":emp_id,"name":p[0][1],"rounds":json.loads(p[0][2]),
                 "r1_pts":float(pts_row[0]),"r2_pts":float(pts_row[1]),
-                "r3_pts":float(pts_row[2]),"bonus_pts":float(pts_row[3]),
-                "total":float(pts_row[4]),"predictions":pred_detail}
+                "r3_pts":float(pts_row[2]),"r4_pts":float(pts_row[3]),
+                "bonus_pts":float(pts_row[4]),"total":float(pts_row[5]),
+                "predictions":pred_detail}
     finally:
         conn.close()
 

@@ -194,7 +194,7 @@ tr:hover td{background:var(--surface2)}
         <th style="width:46px;text-align:center;color:var(--r1)">ج1</th>
         <th style="width:46px;text-align:center;color:var(--r2)">ج2</th>
         <th style="width:46px;text-align:center;color:var(--r3)">ج3</th>
-        <th style="width:46px;text-align:center;color:#7B1FA2">R32</th>
+        <th style="width:46px;text-align:center;color:#7B1FA2" id="th-r32">R32</th>
         <th style="width:130px" id="th-total">المجموع</th>
         <th style="width:55px;text-align:center" id="th-rounds">الجولات</th>
       </tr></thead>
@@ -242,12 +242,12 @@ const T = {
     chart3: 'توزيع المشاركين حسب الجولات',
     lb: 'قائمة المتصدرين الكاملة',
     search: 'ابحث بالاسم أو الرقم...',
-    thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات',
+    thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات', thR32: 'د32',
     bannerTitle: 'آخر نتائج مُسجَّلة',
     footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم FIFA 2026',
     participant: 'مشارك',
     roundLabels: ['الجولة الأولى','الجولة الثانية','الجولة الثالثة','دور الـ32'],
-    comboLabels: ['كل الأدوار','ج1+ج2+ج3','ج1+ج2+R32','ج1+ج3+R32','ج2+ج3+R32','ج1+ج2','ج1+ج3','ج1+R32','ج2+ج3','ج2+R32','ج3+R32','ج1 فقط','ج2 فقط','ج3 فقط','R32 فقط'],
+    comboLabels: ['كل الأدوار','ج1+ج2+ج3','ج1+ج2+د32','ج1+ج3+د32','ج2+ج3+د32','ج1+ج2','ج1+ج3','ج1+د32','ج2+ج3','ج2+د32','ج3+د32','ج1 فقط','ج2 فقط','ج3 فقط','د32 فقط'],
     tooltipRange: 'نطاق: ', tooltipPart: ' مشارك', tooltipPts: ' نقطة',
     updated: 'آخر تحديث: ',
     flashUpdate: '✅ New Result: ',
@@ -279,7 +279,7 @@ const T = {
     chart3: 'Participant Distribution by Rounds Participated',
     lb: 'Full Leaderboard',
     search: 'Search by name or ID...',
-    thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds',
+    thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds', thR32: 'R32',
     bannerTitle: 'Latest Results',
     footer: 'SMI Mechanical — Internal Prediction League · FIFA World Cup 2026',
     participant: 'participants',
@@ -312,6 +312,7 @@ function applyLang() {
   document.getElementById('th-name').textContent = t('thName');
   document.getElementById('th-id').textContent = t('thId');
   document.getElementById('th-total').textContent = t('thTotal');
+  const thr = document.getElementById('th-r32'); if(thr) thr.textContent = t('thR32');
   document.getElementById('th-rounds').textContent = t('thRounds');
   document.getElementById('footer-txt').textContent = t('footer');
   document.getElementById('hdr-date').textContent = t('updated') +

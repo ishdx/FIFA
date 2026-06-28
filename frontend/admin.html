@@ -257,7 +257,7 @@ function renderMatches(filter) {
       <option value="">— اختر النتيجة —</option>${opts}
     </select>`;
     return `<tr>
-      <td style="text-align:center;font-weight:600">${m.round === 4 ? "R32" : m.round}</td>
+      <td style="text-align:center;font-weight:600">${m.round === 4 ? "د32" : m.round}</td>
       <td style="font-size:13px">${m.match_name}</td>
       <td>${sel}</td>
       <td style="text-align:center">${badge}</td>
@@ -302,7 +302,7 @@ async function searchParticipant() {
   const res = await fetch(API + `/api/admin/participant/${emp_id}`, { headers: authHeaders() });
   const p = await res.json();
   const rows = p.predictions.map(pr => `<tr>
-    <td>ج${pr.round}</td>
+    <td>${pr.round===4?'د32':'ج'+pr.round}</td>
     <td style="font-size:12px">${pr.match}</td>
     <td style="font-size:12px">${pr.prediction||'—'}</td>
     <td style="font-size:12px">${pr.result||'—'}</td>
@@ -320,7 +320,8 @@ async function searchParticipant() {
           <span>ج1: <strong style="color:#1565C0">${p.r1_pts}</strong></span>
           <span>ج2: <strong style="color:#2E7D32">${p.r2_pts}</strong></span>
           <span>ج3: <strong style="color:var(--red)">${p.r3_pts}</strong></span>
-          <span>مكافأة: <strong style="color:#7B1FA2">${p.bonus_pts}</strong></span>
+          <span>R32: <strong style="color:#7B1FA2">${p.r4_pts||0}</strong></span>
+          <span>مكافأة: <strong style="color:#E65100">${p.bonus_pts}</strong></span>
           <span style="font-size:15px;font-weight:700;color:var(--red)">الإجمالي: ${p.total}</span>
         </div>
       </div>
