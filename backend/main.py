@@ -249,7 +249,9 @@ def get_stats():
         r2c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2") or [[0]])[0][0]
         r3c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3") or [[0]])[0][0]
         r4c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=4") or [[0]])[0][0]
-        all3    = (safe_run(conn, "SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)=3) x") or [[0]])[0][0]
+        # Count participants who participated in ALL rounds (R1+R2+R3+R32)
+        max_rounds = (safe_run(conn, "SELECT COUNT(DISTINCT round) FROM predictions") or [[4]])[0][0]
+        all3    = (safe_run(conn, f"SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)={max_rounds}) x") or [[0]])[0][0]
         top     = safe_run(conn, "SELECT emp_id,r1_pts,r2_pts,r3_pts,COALESCE(bonus_pts,0),total FROM points_cache ORDER BY total DESC LIMIT 1") or []
         avg_row = safe_run(conn, "SELECT AVG(total),AVG(r1_pts),AVG(r2_pts),AVG(r3_pts) FROM points_cache") or [[0,0,0,0]]
         avg     = avg_row[0]
@@ -264,17 +266,31 @@ def get_stats():
             top_data = {"name":p[0][0] if p else "","total":float(t[5] or 0),
                         "r1":float(t[1] or 0),"r2":float(t[2] or 0),"r3":float(t[3] or 0),"bonus":float(t[4] or 0)}
 
-        combos = {}
-        for k, q in [
-            ("r1only","SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=1 AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=2) AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=3)"),
-            ("r2only","SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2 AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=1) AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=3)"),
-            ("r3only","SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3 AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=1) AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=2)"),
-            ("r1r2","SELECT COUNT(DISTINCT p1.emp_id) FROM predictions p1 JOIN predictions p2 ON p1.emp_id=p2.emp_id WHERE p1.round=1 AND p2.round=2 AND p1.emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=3)"),
-            ("r1r3","SELECT COUNT(DISTINCT p1.emp_id) FROM predictions p1 JOIN predictions p2 ON p1.emp_id=p2.emp_id WHERE p1.round=1 AND p2.round=3 AND p1.emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=2)"),
-            ("r2r3","SELECT COUNT(DISTINCT p1.emp_id) FROM predictions p1 JOIN predictions p2 ON p1.emp_id=p2.emp_id WHERE p1.round=2 AND p2.round=3 AND p1.emp_id NOT IN (SELECT emp_id FROM predictions WHERE round=1)"),
-        ]:
-            combos[k] = db_run(conn, q)[0][0]
-        combos["all3"] = all3
+        def count_rounds(has, not_has):
+            q = "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE 1=1"
+            for r in has:
+                q += f" AND emp_id IN (SELECT emp_id FROM predictions WHERE round={r})"
+            for r in not_has:
+                q += f" AND emp_id NOT IN (SELECT emp_id FROM predictions WHERE round={r})"
+            return (safe_run(conn, q) or [[0]])[0][0]
+
+        combos = {
+            "all_rounds": all3,
+            "r1only":  count_rounds([1], [2,3,4]),
+            "r2only":  count_rounds([2], [1,3,4]),
+            "r3only":  count_rounds([3], [1,2,4]),
+            "r4only":  count_rounds([4], [1,2,3]),
+            "r1r2":    count_rounds([1,2], [3,4]),
+            "r1r3":    count_rounds([1,3], [2,4]),
+            "r1r4":    count_rounds([1,4], [2,3]),
+            "r2r3":    count_rounds([2,3], [1,4]),
+            "r2r4":    count_rounds([2,4], [1,3]),
+            "r3r4":    count_rounds([3,4], [1,2]),
+            "r1r2r3":  count_rounds([1,2,3], [4]),
+            "r1r2r4":  count_rounds([1,2,4], [3]),
+            "r1r3r4":  count_rounds([1,3,4], [2]),
+            "r2r3r4":  count_rounds([2,3,4], [1]),
+        }
 
         totals = [r[0] for r in db_run(conn, "SELECT total FROM points_cache")]
         bins = [0,30,40,50,60,70,80,90,100,110,120,130,500]
@@ -624,7 +640,7 @@ def export_excel(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -647,8 +663,8 @@ def export_excel(_=Depends(require_admin)):
             s = Side(style='thin', color='FFCCCCCC')
             return Border(left=s, right=s, top=s, bottom=s)
 
-        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'Bonus Points', 'Total']
-        widths  = [5, 14, 32, 10, 11, 11, 11, 13, 10]
+        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'Bonus Points', 'Total']
+        widths  = [5, 14, 32, 10, 11, 11, 11, 11, 13, 10]
 
         # Header row
         for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -662,11 +678,11 @@ def export_excel(_=Depends(require_admin)):
 
         # Data rows
         for rank, row in enumerate(rows, 1):
-            emp_id, name, rounds_json, r1, r2, r3, bonus, total = row
+            emp_id, name, rounds_json, r1, r2, r3, r4, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
-            rounds_str = '+'.join([f'R{r}' for r in sorted(rounds)])
+            rounds_str = '+'.join([f'R{r}' if r != 4 else 'R32' for r in sorted(rounds)])
             er = rank + 1
-            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(bonus), float(total)]
+            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(r4), float(bonus), float(total)]
             medal = {1:'FFD700', 2:'C0C0C0', 3:'CD7F32'}
             for ci, val in enumerate(data, 1):
                 c = ws.cell(row=er, column=ci, value=val)
@@ -725,7 +741,7 @@ def export_pdf(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -751,21 +767,20 @@ def export_pdf(_=Depends(require_admin)):
             sub_style))
         elements.append(Spacer(1, 4*mm))
 
-        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'Bonus', 'Total']
+        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'R32', 'Bonus', 'Total']
         table_data = [col_headers]
         for rank, row in enumerate(rows, 1):
-            emp_id, name, rounds_json, r1, r2, r3, bonus, total = row
+            emp_id, name, rounds_json, r1, r2, r3, r4, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
-            rounds_str = '+'.join([f'R{r}' for r in sorted(rounds)])
-            # Apply Arabic reshaping to name
+            rounds_str = '+'.join([f'R{r}' if r != 4 else 'R32' for r in sorted(rounds)])
             display_name = ar(name)
             table_data.append([
                 str(rank), str(emp_id), display_name, rounds_str,
                 str(int(r1)), str(int(r2)), str(int(r3)),
-                str(int(bonus)), str(int(total))
+                str(int(r4)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [12*mm, 20*mm, 72*mm, 20*mm, 16*mm, 16*mm, 16*mm, 18*mm, 18*mm]
+        col_widths = [10*mm, 18*mm, 65*mm, 18*mm, 13*mm, 13*mm, 13*mm, 13*mm, 15*mm, 15*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
@@ -790,8 +805,8 @@ def export_pdf(_=Depends(require_admin)):
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('TOPPADDING', (0,0), (-1,-1), 4),
             ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('BACKGROUND', (8,1), (8,-1), peach),
-            ('FONTNAME',   (8,1), (8,-1), 'Helvetica-Bold'),
+            ('BACKGROUND', (9,1), (9,-1), peach),
+            ('FONTNAME',   (9,1), (9,-1), 'Helvetica-Bold'),
         ]
         if len(table_data) > 1: style_cmds.append(('BACKGROUND', (0,1), (-1,1), gold))
         if len(table_data) > 2: style_cmds.append(('BACKGROUND', (0,2), (-1,2), silver))

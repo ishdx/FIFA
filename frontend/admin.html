@@ -241,7 +241,7 @@ function renderMatches(filter) {
   let data = allMatchesData;
   if (filter === 'done') data = data.filter(m => m.status === 'done');
   else if (filter === 'pending') data = data.filter(m => m.status === 'pending');
-  else if (['1','2','3'].includes(filter)) data = data.filter(m => String(m.round) === filter);
+  else if (['1','2','3','4'].includes(filter)) data = data.filter(m => String(m.round) === filter);
 
   const tbody = document.getElementById('all-matches-body');
   tbody.innerHTML = data.map(m => {
