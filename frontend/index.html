@@ -364,7 +364,7 @@ async function loadTable() {
 
   const medal={1:'r1b',2:'r2b',3:'r3b'};
   document.getElementById('lb-body').innerHTML = data.data.map((p,idx)=>{
-    const seqRank = (page-1)*20 + idx + 1;
+    const seqRank = search.trim() ? p.rank : (page-1)*20 + idx + 1;
     const pct=Math.round((p.total/maxPts)*100);
     const dots=[p.p1,p.p2,p.p3,p.p4].map(v=>`<div class="dot ${v?'dot-on':'dot-off'}"></div>`).join('');
     const cls=medal[seqRank]||'rnb';
