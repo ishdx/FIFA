@@ -292,9 +292,6 @@ function applyLang() {
   document.getElementById('round-badge').textContent = t('badge');
   document.getElementById('b-title').innerHTML = t('bannerTitle') + ' <span class="live-dot"></span>';
   document.getElementById('prog-label').textContent = t('progress');
-  document.getElementById('chart1-title').textContent = t('chart1');
-  document.getElementById('chart2-title').textContent = t('chart2');
-  document.getElementById('chart3-title').textContent = t('chart3');
   document.getElementById('lb-title').innerHTML = '<i data-lucide="trophy" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-inline-end:5px"></i> ' + t('lb');
   document.getElementById('search').placeholder = t('search');
   document.getElementById('th-name').textContent = t('thName');
@@ -341,7 +338,6 @@ function renderStats(s) {
 
 
 
-  const c = s.combos;
 
   setTimeout(initIcons, 0);
 }
