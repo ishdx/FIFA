@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SMI — FIFA 2026 Prediction League</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -154,23 +153,13 @@ tr:hover td{background:var(--surface2)}
     <span class="prog-label" id="prog-count"></span>
   </div>
 
-  <div id="kpi-section"><div class="spinner"><div class="spin"></div></div></div>
-  <div id="avg-section"></div>
-  <div id="part-section"></div>
 
-  <div class="charts-row">
-    <div class="card"><div class="sec-title" id="chart1-title">توزيع المشاركين حسب إجمالي النقاط</div>
-      <div style="position:relative;width:100%;height:210px"><canvas id="distChart"></canvas></div>
-    </div>
-    <div class="card"><div class="sec-title" id="chart2-title">متوسط نقاط الجولة</div>
-      <div style="position:relative;width:100%;height:210px"><canvas id="roundChart"></canvas></div>
-    </div>
-  </div>
 
-  <div class="card-full">
-    <div class="sec-title" id="chart3-title">توزيع المشاركين حسب الجولات</div>
-    <div style="position:relative;width:100%;height:420px"><canvas id="partChart"></canvas></div>
-  </div>
+
+
+
+
+  
 
   <div class="card-full">
     <div class="sec-title" id="lb-title">قائمة المتصدرين الكاملة</div>
@@ -210,7 +199,6 @@ tr:hover td{background:var(--surface2)}
 <script>
 const API = '';
 let page = 1, maxPts = 1;
-let distChart, roundChart, partChart;
 let lang = localStorage.getItem('dash_lang') || 'ar';
 let lastStats = null;
 
@@ -351,81 +339,13 @@ function renderStats(s) {
   document.getElementById('prog-bar').style.width = pct+'%';
   document.getElementById('prog-count').textContent = s.matches_done+' / '+total_matches+' '+t('matches');
 
-  document.getElementById('kpi-section').innerHTML = `
-    <div class="kpi-grid">
-      <div class="kpi"><div class="lbl"><i data-lucide="users" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('title').includes('مساب') ? 'إجمالي المشاركين' : 'Total Participants'}</div>
-        <div class="val">${s.total_participants}</div><div class="sub">${t('participants')}</div></div>
-      <div class="kpi"><div class="lbl"><i data-lucide="target" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('allRounds')}</div>
-        <div class="val" style="color:var(--r1)">${s.all3_participants}</div>
-        <div class="sub">${Math.round(s.all3_participants/s.total_participants*100)}${t('pctTotal')}</div></div>
-      <div class="kpi accent"><div class="lbl"><i data-lucide="medal" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('topScore')}</div>
-        <div class="val">${s.leader.total}</div><div class="sub">${s.leader.name}</div></div>
-      <div class="kpi"><div class="lbl"><i data-lucide="bar-chart-2" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-left:4px;margin-right:4px"></i>${t('avgTotal')}</div>
-        <div class="val">${s.avg_total}</div><div class="sub">${t('ptsPer')}</div></div>
-    </div>`;
 
-  document.getElementById('avg-section').innerHTML = `
-    <div class="avg-row" style="grid-template-columns:repeat(5,1fr)">
-      <div class="avg-pill"><div class="albl">${t('avgR1')}</div><div class="aval" style="color:var(--r1)">${s.avg_r1}</div></div>
-      <div class="avg-pill"><div class="albl">${t('avgR2')}</div><div class="aval" style="color:var(--r2)">${s.avg_r2}</div></div>
-      <div class="avg-pill"><div class="albl">${t('avgR3')}</div><div class="aval" style="color:var(--r3)">${s.avg_r3}</div></div>
-      <div class="avg-pill"><div class="albl">${t('avgR4')}</div><div class="aval" style="color:#7B1FA2">${s.avg_r4||0}</div></div>
-      <div class="avg-pill"><div class="albl">${t('minPts')}</div><div class="aval" style="color:var(--text2)">${s.min_total}</div></div>
-    </div>`;
 
   const c = s.combos;
-  document.getElementById('part-section').innerHTML = `
-    <div class="part-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="part-card"><div class="pnum" style="color:var(--r1)">${s.r1_participants}</div><div class="pdesc">${t('r1Part')}</div></div>
-      <div class="part-card"><div class="pnum" style="color:var(--r2)">${s.r2_participants}</div><div class="pdesc">${t('r2Part')}</div></div>
-      <div class="part-card"><div class="pnum" style="color:var(--r3)">${s.r3_participants}</div><div class="pdesc">${t('r3Part')}</div></div>
-      <div class="part-card"><div class="pnum" style="color:#7B1FA2">${s.r4_participants||0}</div><div class="pdesc">${t('r4Part')}</div></div>
-    </div>`;
 
-  buildCharts(s);
   setTimeout(initIcons, 0);
 }
 
-function buildCharts(s) {
-  const isDark = matchMedia('(prefers-color-scheme:dark)').matches;
-  const grid = isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)';
-  const tick = isDark?'#6a6a64':'#888';
-  const c = s.combos;
-
-  if(distChart) distChart.destroy();
-  distChart = new Chart(document.getElementById('distChart'),{
-    type:'bar',
-    data:{labels:s.dist_labels,datasets:[{data:s.dist_values,label:t('participant'),
-      backgroundColor:s.dist_values.map(v=>v>=15?'#E01428':'#f5a0aa'),borderWidth:0,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{
-        title:c=>t('tooltipRange')+c[0].label,
-        label:c=>' '+c.raw+t('tooltipPart')}}},
-      scales:{x:{ticks:{font:{size:10},color:tick},grid:{display:false}},
-              y:{beginAtZero:true,ticks:{font:{size:10},color:tick},grid:{color:grid}}}}});
-
-  if(roundChart) roundChart.destroy();
-  roundChart = new Chart(document.getElementById('roundChart'),{
-    type:'bar',
-    data:{labels:t('roundLabels'),datasets:[{data:[s.avg_r1,s.avg_r2,s.avg_r3,s.avg_r4||0],
-      backgroundColor:['#1565C0','#2E7D32','#E01428','#7B1FA2'],borderWidth:0,borderRadius:6}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw.toFixed(1)+t('tooltipPts')}}},
-      scales:{x:{ticks:{font:{size:11},color:tick},grid:{display:false}},
-              y:{beginAtZero:true,ticks:{font:{size:10},color:tick},grid:{color:grid}}}}});
-
-  if(partChart) partChart.destroy();
-  partChart = new Chart(document.getElementById('partChart'),{
-    type:'bar',
-    data:{labels:t('comboLabels'),datasets:[{
-      data:[c.all_rounds,c.r1r2r3,c.r1r2r4,c.r1r3r4,c.r2r3r4,c.r1r2,c.r1r3,c.r1r4,c.r2r3,c.r2r4,c.r3r4,c.r1only,c.r2only,c.r3only,c.r4only],
-      backgroundColor:['#1A1A1A','#263238','#1565C0','#0277BD','#01579B','#2E7D32','#388E3C','#43A047','#66BB6A','#8BC34A','#C8E6C9','#E01428','#EF5350','#FF7043','#7B1FA2'],
-      borderWidth:0,borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+t('tooltipPart')}}},
-      scales:{x:{beginAtZero:true,ticks:{font:{size:10},color:tick},grid:{color:grid}},
-              y:{ticks:{font:{size:11},color:tick},grid:{display:false}}}}});
-}
 
 async function loadRecentResults() {
   const res = await fetch(API + '/api/matches');
