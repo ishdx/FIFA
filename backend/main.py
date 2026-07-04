@@ -118,13 +118,14 @@ def recalc_all_points(conn):
         bonus_row = safe_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=%s", emp_id)
         bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
         total = pts[1] + pts[2] + pts[3] + pts[4] + pts[5] + bonus_pts
-        safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,r4_pts,bonus_pts,total)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+        safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,r4_pts,r5_pts,bonus_pts,total)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (emp_id) DO UPDATE SET
                     r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
                     r3_pts=EXCLUDED.r3_pts, r4_pts=EXCLUDED.r4_pts,
+                    r5_pts=EXCLUDED.r5_pts,
                     total=EXCLUDED.total""",
-                 emp_id, pts[1], pts[2], pts[3], pts[4], bonus_pts, total)
+                 emp_id, pts[1], pts[2], pts[3], pts[4], pts[5], bonus_pts, total)
 
 # ── DB init ───────────────────────────────────────────────
 def init_db(conn):
