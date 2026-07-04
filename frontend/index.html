@@ -172,6 +172,7 @@ tr:hover td{background:var(--surface2)}
         <option value="r3" data-ar="شارك في ج3" data-en="Round 3">شارك في ج3</option>
         <option value="all3" data-ar="شارك في كل الأدوار" data-en="All Rounds">شارك في كل الأدوار</option>
         <option value="r4" data-ar="شارك في دور الـ32" data-en="Round of 32">شارك في دور الـ32</option>
+        <option value="r5" data-ar="شارك في دور الـ16" data-en="Round of 16">شارك في دور الـ16</option>
       </select>
       <span class="pg-info" id="pg-info"></span>
     </div>
@@ -184,6 +185,7 @@ tr:hover td{background:var(--surface2)}
         <th style="width:46px;text-align:center;color:var(--r2)">ج2</th>
         <th style="width:46px;text-align:center;color:var(--r3)">ج3</th>
         <th style="width:46px;text-align:center;color:#7B1FA2" id="th-r32">R32</th>
+        <th style="width:46px;text-align:center;color:#00838F" id="th-r16">R16</th>
         <th style="width:130px" id="th-total">المجموع</th>
         <th style="width:55px;text-align:center" id="th-rounds">الجولات</th>
       </tr></thead>
@@ -207,7 +209,7 @@ const T = {
   ar: {
     title: 'مسابقة دوري التوقعات',
     sub: 'كأس العالم FIFA 2026',
-    badge: 'دور الـ32 — جاري',
+    badge: 'دور الـ16 — جاري',
     loading: 'جاري التحميل...',
     progress: 'تقدم البطولة',
     matches: 'مباراة',
@@ -230,7 +232,7 @@ const T = {
     chart3: 'توزيع المشاركين حسب الجولات',
     lb: 'قائمة المتصدرين الكاملة',
     search: 'ابحث بالاسم أو الرقم...',
-    thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات', thR32: 'د32',
+    thName: 'الاسم', thId: 'الرقم', thTotal: 'المجموع', thRounds: 'الجولات', thR32: 'د32', thR16: 'د16',
     bannerTitle: 'آخر نتائج مُسجَّلة',
     footer: 'SMI ميكانيكية — مسابقة دوري التوقعات الداخلية · كأس العالم FIFA 2026',
     participant: 'مشارك',
@@ -244,7 +246,7 @@ const T = {
   en: {
     title: 'Prediction League',
     sub: 'FIFA World Cup 2026',
-    badge: 'Round of 32 — Active',
+    badge: 'Round of 16 — Active',
     loading: 'Loading...',
     progress: 'Tournament Progress',
     matches: 'matches',
@@ -267,7 +269,7 @@ const T = {
     chart3: 'Participant Distribution by Rounds Participated',
     lb: 'Full Leaderboard',
     search: 'Search by name or ID...',
-    thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds', thR32: 'R32',
+    thName: 'Name', thId: 'ID', thTotal: 'Total', thRounds: 'Rounds', thR32: 'R32', thR16: 'R16',
     bannerTitle: 'Latest Results',
     footer: 'SMI Mechanical — Internal Prediction League · FIFA World Cup 2026',
     participant: 'participants',
@@ -298,6 +300,7 @@ function applyLang() {
   document.getElementById('th-id').textContent = t('thId');
   document.getElementById('th-total').textContent = t('thTotal');
   const thr = document.getElementById('th-r32'); if(thr) thr.textContent = t('thR32');
+  const thr16 = document.getElementById('th-r16'); if(thr16) thr16.textContent = t('thR16');
   document.getElementById('th-rounds').textContent = t('thRounds');
   document.getElementById('footer-txt').textContent = t('footer');
   document.getElementById('hdr-date').textContent = t('updated') +
@@ -366,7 +369,7 @@ async function loadTable() {
   document.getElementById('lb-body').innerHTML = data.data.map((p,idx)=>{
     const seqRank = search.trim() ? p.rank : (page-1)*20 + idx + 1;
     const pct=Math.round((p.total/maxPts)*100);
-    const dots=[p.p1,p.p2,p.p3,p.p4].map(v=>`<div class="dot ${v?'dot-on':'dot-off'}"></div>`).join('');
+    const dots=[p.p1,p.p2,p.p3,p.p4,p.p5].map(v=>`<div class="dot ${v?'dot-on':'dot-off'}"></div>`).join('');
     const cls=medal[seqRank]||'rnb';
     return `<tr>
       <td style="text-align:center"><span class="rnk ${cls}">${seqRank}</span></td>
@@ -376,6 +379,7 @@ async function loadTable() {
       <td style="text-align:center;color:var(--r2);font-weight:500">${p.p2?p.r2:'—'}</td>
       <td style="text-align:center;color:var(--r3);font-weight:500">${p.p3?p.r3:'—'}</td>
       <td style="text-align:center;color:#7B1FA2;font-weight:500">${p.p4?p.r4:'—'}</td>
+      <td style="text-align:center;color:#00838F;font-weight:500">${p.p5?p.r5:'—'}</td>
       <td><div class="bar-w">
         <span style="font-weight:700;font-size:14px;min-width:32px">${p.total}</span>
         <div class="bar-bg"><div class="bar-f" style="width:${pct}%"></div></div>

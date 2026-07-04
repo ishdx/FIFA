@@ -110,14 +110,14 @@ def recalc_all_points(conn):
         emp_id = row[0]
         preds = safe_run(conn,
             "SELECT round, match_name, prediction FROM predictions WHERE emp_id=%s", emp_id)
-        pts = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0}
+        pts = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0}
         for pr in preds:
             key = (pr[0], pr[1])
             if key in results and pr[2] and check_pred(pr[2], results[key]):
                 pts[pr[0]] += 3.0
         bonus_row = safe_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=%s", emp_id)
         bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
-        total = pts[1] + pts[2] + pts[3] + pts[4] + bonus_pts
+        total = pts[1] + pts[2] + pts[3] + pts[4] + pts[5] + bonus_pts
         safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,r4_pts,bonus_pts,total)
                     VALUES (%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (emp_id) DO UPDATE SET
@@ -249,6 +249,7 @@ def get_stats():
         r2c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=2") or [[0]])[0][0]
         r3c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=3") or [[0]])[0][0]
         r4c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=4") or [[0]])[0][0]
+        r5c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=5") or [[0]])[0][0]
         # Count participants who participated in ALL rounds (R1+R2+R3+R32)
         max_rounds = (safe_run(conn, "SELECT COUNT(DISTINCT round) FROM predictions") or [[4]])[0][0]
         all3    = (safe_run(conn, f"SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)={max_rounds}) x") or [[0]])[0][0]
@@ -308,6 +309,8 @@ def get_stats():
                 "min_total":float(mn or 0),"matches_done":done,"matches_pending":pending,
                 "r4_participants":r4c,
                 "avg_r4":round(float((safe_run(conn,"SELECT AVG(COALESCE(r4_pts,0)) FROM points_cache WHERE emp_id IN (SELECT DISTINCT emp_id FROM predictions WHERE round=4)") or [[0]])[0][0] or 0),1),
+                "r5_participants":r5c,
+                "avg_r5":round(float((safe_run(conn,"SELECT AVG(COALESCE(r5_pts,0)) FROM points_cache WHERE emp_id IN (SELECT DISTINCT emp_id FROM predictions WHERE round=5)") or [[0]])[0][0] or 0),1),
                 "combos":combos,"dist_labels":bl,"dist_values":dist}
     finally:
         conn.close()
@@ -317,7 +320,7 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
     conn = get_conn()
     try:
         rows = db_run(conn, """SELECT pc.emp_id,p.name,pc.r1_pts,pc.r2_pts,pc.r3_pts,
-                           COALESCE(pc.r4_pts,0),COALESCE(pc.bonus_pts,0),pc.total,p.rounds
+                           COALESCE(pc.r4_pts,0),COALESCE(pc.r5_pts,0),COALESCE(pc.bonus_pts,0),pc.total,p.rounds
                            FROM points_cache pc JOIN participants p ON pc.emp_id=p.emp_id
                            ORDER BY pc.total DESC, p.name ASC""")
         # First pass: assign global rank to all rows
@@ -330,17 +333,18 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
         # Second pass: filter and return with global rank preserved
         results = []
         for global_rank, r in all_rows:
-            rounds = json.loads(r[8])
+            rounds = json.loads(r[9])
             if round_filter=="r1" and 1 not in rounds: continue
             if round_filter=="r2" and 2 not in rounds: continue
             if round_filter=="r3" and 3 not in rounds: continue
             if round_filter=="r4" and 4 not in rounds: continue
+            if round_filter=="r5" and 5 not in rounds: continue
             if round_filter=="all3" and not all(x in rounds for x in [1,2,3]): continue
             if search and search.lower() not in r[1].lower() and search not in r[0]: continue
             results.append({"rank":global_rank,"emp_id":r[0],"name":r[1],
                             "r1":float(r[2]),"r2":float(r[3]),"r3":float(r[4]),
-                            "r4":float(r[5]),"bonus":float(r[6]),"total":float(r[7]),
-                            "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds,"p4":4 in rounds})
+                            "r4":float(r[5]),"r5":float(r[6]),"bonus":float(r[7]),"total":float(r[8]),
+                            "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds,"p4":4 in rounds,"p5":5 in rounds})
         start=(page-1)*per_page
         return {"data":results[start:start+per_page],"total":len(results),"page":page,"per_page":per_page}
     finally:
@@ -926,6 +930,81 @@ async def add_round4(_=Depends(require_admin)):
 
     threading.Thread(target=do_add, daemon=True).start()
     return {"status": "ok", "message": "R4 migration started — check /api/health in 30s for participant count"}
+
+
+@app.post("/api/admin/add-round5")
+async def add_round5(_=Depends(require_admin)):
+    """Add Round of 16 (R5) predictions and matches in background."""
+    import threading
+    seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "r5_data.json")
+    if not os.path.exists(seed_path):
+        raise HTTPException(404, "r5_data.json not found")
+
+    with open(seed_path, encoding="utf-8") as f:
+        r5 = json.load(f)
+
+    def do_add():
+        try:
+            conn = get_conn()
+            print("Starting R16 (R5) migration...")
+
+            # Add r5_pts column if needed
+            try: conn.run("ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS r5_pts REAL DEFAULT 0")
+            except Exception: pass
+
+            # Get existing participants
+            existing_rows = conn.run("SELECT emp_id, rounds FROM participants")
+            existing = {r[0]: json.loads(r[1]) for r in existing_rows}
+
+            # Add new participants
+            new_emps = [(eid, info["name"]) for eid, info in r5["participants"].items() if eid not in existing]
+            if new_emps:
+                ph = ",".join(f"(${i*3+1},${i*3+2},'[5]')" for i in range(len(new_emps)))
+                flat = [v for row in new_emps for v in row]
+                conn.run(f"INSERT INTO participants (emp_id,name,rounds) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
+                ph2 = ",".join(f"(${i+1},0,0,0,0,0,0)" for i in range(len(new_emps)))
+                flat2 = [r[0] for r in new_emps]
+                conn.run(f"INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,r4_pts,bonus_pts,total) VALUES {ph2} ON CONFLICT DO NOTHING", *flat2)
+                print(f"Added {len(new_emps)} new participants")
+
+            # Update rounds for existing participants
+            for eid in r5["participants"]:
+                if eid in existing and 5 not in existing[eid]:
+                    new_rounds = json.dumps(sorted(existing[eid] + [5]))
+                    conn.run("UPDATE participants SET rounds=$1 WHERE emp_id=$2", new_rounds, eid)
+
+            # Batch insert predictions
+            existing_preds = set((r[0], r[1]) for r in conn.run("SELECT emp_id, match_name FROM predictions WHERE round=5"))
+            all_preds = [(eid, mn, pv or "") for eid, info in r5["participants"].items()
+                        for mn, pv in info["predictions"].items() if (eid, mn) not in existing_preds]
+
+            chunk = 200
+            for i in range(0, len(all_preds), chunk):
+                c = all_preds[i:i+chunk]
+                ph = ",".join(f"(${j*3+1},5,${j*3+2},${j*3+3})" for j in range(len(c)))
+                flat = [v for row in c for v in row]
+                conn.run(f"INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
+            print(f"Added {len(all_preds)} predictions")
+
+            # Add matches
+            existing_matches = set(r[0] for r in conn.run("SELECT match_name FROM matches WHERE round=5"))
+            match_rows = [(mn, json.dumps(r5["options"].get(mn,[]), ensure_ascii=False))
+                         for mn in r5["matches"] if mn not in existing_matches]
+            if match_rows:
+                ph = ",".join(f"(5,${i*2+1},'pending',${i*2+2})" for i in range(len(match_rows)))
+                flat = [v for row in match_rows for v in row]
+                conn.run(f"INSERT INTO matches (round,match_name,status,options) VALUES {ph} ON CONFLICT DO NOTHING", *flat)
+                print(f"Added {len(match_rows)} matches")
+
+            conn.run("UPDATE points_cache SET total=COALESCE(r1_pts,0)+COALESCE(r2_pts,0)+COALESCE(r3_pts,0)+COALESCE(r4_pts,0)+COALESCE(r5_pts,0)+COALESCE(bonus_pts,0)")
+            conn.close()
+            print("R16 migration complete!")
+        except Exception as e:
+            traceback.print_exc()
+            print(f"R16 migration FAILED: {e}")
+
+    threading.Thread(target=do_add, daemon=True).start()
+    return {"status": "ok", "message": "R16 migration started — check /api/health in 30s"}
 
 # ── Serve frontend ────────────────────────────────────────
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
