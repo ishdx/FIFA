@@ -857,7 +857,7 @@ async def add_round4(_=Depends(require_admin)):
             print("Starting R4 migration...")
 
             # Step 1: Get existing participants and their rounds in one query
-            existing_rows = conn.run("SELECT emp_id, rounds FROM participants")
+            existing_rows = safe_run(conn, "SELECT emp_id, rounds FROM participants") or []
             existing = {r[0]: json.loads(r[1]) for r in existing_rows}
 
             # Step 2: Add new participants in one batch
@@ -982,35 +982,35 @@ def add_round5(_=Depends(require_admin)):
         # Add new participants one by one (safe)
         for eid, info in r5["participants"].items():
             if eid not in existing:
-                conn.run("INSERT INTO participants (emp_id,name,rounds) VALUES ($1,$2,'[5]') ON CONFLICT DO NOTHING",
+                safe_run(conn, "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,'[5]') ON CONFLICT DO NOTHING",
                          eid, info["name"])
-                conn.run("INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES ($1,0,0,0,0,0) ON CONFLICT DO NOTHING", eid)
+                safe_run(conn, "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES (%s,0,0,0,0,0) ON CONFLICT DO NOTHING", eid)
                 stats["new_participants"] += 1
             elif 5 not in existing[eid]:
                 new_rounds = json.dumps(sorted(existing[eid] + [5]))
-                conn.run("UPDATE participants SET rounds=$1 WHERE emp_id=$2", new_rounds, eid)
+                safe_run(conn, "UPDATE participants SET rounds=%s WHERE emp_id=%s", new_rounds, eid)
                 stats["rounds_updated"] += 1
 
         # Get existing R5 predictions
-        existing_preds = set((r[0], r[1]) for r in conn.run("SELECT emp_id, match_name FROM predictions WHERE round=5"))
+        existing_preds = set((r[0], r[1]) for r in (safe_run(conn, "SELECT emp_id, match_name FROM predictions WHERE round=5") or []))
 
         # Insert predictions one by one (safe)
         for eid, info in r5["participants"].items():
             for mn, pv in info["predictions"].items():
                 if (eid, mn) not in existing_preds:
-                    conn.run("INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES ($1,5,$2,$3) ON CONFLICT DO NOTHING",
+                    safe_run(conn, "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (%s,5,%s,%s) ON CONFLICT DO NOTHING",
                              eid, mn, pv or "")
                     stats["predictions_added"] += 1
 
         # Add matches
-        existing_matches = set(r[0] for r in conn.run("SELECT match_name FROM matches WHERE round=5"))
+        existing_matches = set(r[0] for r in (safe_run(conn, "SELECT match_name FROM matches WHERE round=5") or []))
         for mn in r5["matches"]:
             if mn not in existing_matches:
                 opts = json.dumps(r5["options"].get(mn, []), ensure_ascii=False)
-                conn.run("INSERT INTO matches (round,match_name,status,options) VALUES (5,$1,'pending',$2) ON CONFLICT DO NOTHING", mn, opts)
+                safe_run(conn, "INSERT INTO matches (round,match_name,status,options) VALUES (5,%s,'pending',%s) ON CONFLICT DO NOTHING", mn, opts)
                 stats["matches_added"] += 1
 
-        conn.run("UPDATE points_cache SET total=COALESCE(r1_pts,0)+COALESCE(r2_pts,0)+COALESCE(r3_pts,0)+COALESCE(r4_pts,0)+COALESCE(r5_pts,0)+COALESCE(bonus_pts,0)")
+        safe_run(conn, "UPDATE points_cache SET total=COALESCE(r1_pts,0)+COALESCE(r2_pts,0)+COALESCE(r3_pts,0)+COALESCE(r4_pts,0)+COALESCE(r5_pts,0)+COALESCE(bonus_pts,0)")
         return {"status": "ok", "stats": stats}
     except Exception as e:
         traceback.print_exc()
