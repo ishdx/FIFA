@@ -932,6 +932,31 @@ async def add_round4(_=Depends(require_admin)):
     return {"status": "ok", "message": "R4 migration started — check /api/health in 30s for participant count"}
 
 
+@app.get("/api/admin/check-r5")
+def check_r5(_=Depends(require_admin)):
+    """Check if r5_data.json exists and what's in the DB for round 5."""
+    import os
+    seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "r5_data.json")
+    conn = get_conn()
+    try:
+        r5_matches = (db_run(conn, "SELECT COUNT(*) FROM matches WHERE round=5") or [[0]])[0][0]
+        r5_preds = (db_run(conn, "SELECT COUNT(*) FROM predictions WHERE round=5") or [[0]])[0][0]
+        # Check r5_pts column exists
+        try:
+            db_run(conn, "SELECT r5_pts FROM points_cache LIMIT 1")
+            has_col = True
+        except:
+            has_col = False
+        return {
+            "file_exists": os.path.exists(seed_path),
+            "file_path": seed_path,
+            "r5_matches_in_db": r5_matches,
+            "r5_predictions_in_db": r5_preds,
+            "r5_pts_column_exists": has_col,
+        }
+    finally:
+        conn.close()
+
 @app.post("/api/admin/add-round5")
 async def add_round5(_=Depends(require_admin)):
     """Add Round of 16 (R5) predictions and matches in background."""
