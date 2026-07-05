@@ -769,17 +769,19 @@ def export_pdf(_=Depends(require_admin)):
                                 rightMargin=15*mm, leftMargin=15*mm,
                                 topMargin=15*mm, bottomMargin=15*mm)
 
-        title_style = ParagraphStyle('title', fontSize=16, fontName='Helvetica-Bold',
-                                     textColor=colors.HexColor('#1A1A1A'), spaceAfter=4)
-        sub_style = ParagraphStyle('sub', fontSize=10, fontName='Helvetica',
-                                   textColor=colors.HexColor('#666666'), spaceAfter=12)
+        title_style = ParagraphStyle('title', fontSize=14, fontName='Helvetica-Bold',
+                                     textColor=colors.HexColor('#1A1A1A'), spaceAfter=2,
+                                     leading=18)
+        sub_style = ParagraphStyle('sub', fontSize=8, fontName='Helvetica',
+                                   textColor=colors.HexColor('#666666'), spaceAfter=6,
+                                   leading=12)
 
         elements = []
         elements.append(Paragraph("SMI Mechanical — FIFA World Cup 2026", title_style))
         elements.append(Paragraph(
             f"Prediction League Leaderboard  |  Generated: {datetime.utcnow().strftime('%d %b %Y %H:%M')} UTC  |  Matches played: {done}/104",
             sub_style))
-        elements.append(Spacer(1, 4*mm))
+        elements.append(Spacer(1, 3*mm))
 
         col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'R32', 'R16', 'Bonus', 'Total']
         table_data = [col_headers]
@@ -794,7 +796,7 @@ def export_pdf(_=Depends(require_admin)):
                 str(int(r4)), str(int(r5)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [7*mm, 14*mm, 52*mm, 19*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 12*mm, 12*mm]
+        col_widths = [7*mm, 14*mm, 62*mm, 32*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 11*mm, 11*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
