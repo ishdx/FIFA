@@ -109,7 +109,6 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
   <div class="stats-strip" id="stats-strip"></div>
   <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-red" onclick="recalcPoints()">🔄 إعادة حساب النقاط</button>
-    <button class="btn" style="background:#7B1FA2;color:#fff" onclick="addRound5()" id="r5-btn">➕ إضافة دور الـ16</button>
     <button class="btn btn-green" onclick="exportFile('excel')">📊 تصدير Excel</button>
     <button class="btn btn-gray" onclick="exportFile('pdf')">📄 تصدير PDF</button>
     <span id="recalc-msg" style="font-size:13px;color:var(--green);align-self:center"></span>
@@ -418,21 +417,6 @@ async function exportFile(type) {
 }
 
 
-async function addRound5() {
-  const btn = document.getElementById('r5-btn');
-  if (!confirm('هل تريد إضافة بيانات دور الـ16؟')) return;
-  btn.disabled = true; btn.textContent = '⏳ جاري الإضافة...';
-  const res = await fetch(API + '/api/admin/add-round5', { method:'POST', headers: authHeaders() });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('✅ تم إضافة دور الـ16 — انتظر 30 ثانية ثم تحديث');
-    btn.textContent = '✅ تم إضافة دور الـ16';
-    setTimeout(loadAll, 5000);
-  } else {
-    showToast('خطأ: ' + (data.detail || 'فشلت العملية'), true);
-    btn.disabled = false; btn.textContent = '➕ إضافة دور الـ16';
-  }
-}
 </script>
 </body>
 </html>

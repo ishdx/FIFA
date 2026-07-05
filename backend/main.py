@@ -654,7 +654,7 @@ def export_excel(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.r4_pts,0), COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -677,8 +677,8 @@ def export_excel(_=Depends(require_admin)):
             s = Side(style='thin', color='FFCCCCCC')
             return Border(left=s, right=s, top=s, bottom=s)
 
-        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'Bonus Points', 'Total']
-        widths  = [5, 14, 32, 10, 11, 11, 11, 11, 13, 10]
+        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'R16 Points', 'Bonus Points', 'Total']
+        widths  = [5, 14, 32, 10, 10, 10, 10, 10, 10, 12, 10]
 
         # Header row
         for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -692,11 +692,11 @@ def export_excel(_=Depends(require_admin)):
 
         # Data rows
         for rank, row in enumerate(rows, 1):
-            emp_id, name, rounds_json, r1, r2, r3, r4, bonus, total = row
+            emp_id, name, rounds_json, r1, r2, r3, r4, r5, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
-            rounds_str = '+'.join([f'R{r}' if r != 4 else 'R32' for r in sorted(rounds)])
+            rounds_str = '+'.join(['R32' if r==4 else 'R16' if r==5 else f'R{r}' for r in sorted(rounds)])
             er = rank + 1
-            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(r4), float(bonus), float(total)]
+            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(r4), float(r5), float(bonus), float(total)]
             medal = {1:'FFD700', 2:'C0C0C0', 3:'CD7F32'}
             for ci, val in enumerate(data, 1):
                 c = ws.cell(row=er, column=ci, value=val)
@@ -755,7 +755,7 @@ def export_pdf(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.r4_pts,0), COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -781,20 +781,20 @@ def export_pdf(_=Depends(require_admin)):
             sub_style))
         elements.append(Spacer(1, 4*mm))
 
-        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'R32', 'Bonus', 'Total']
+        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'R32', 'R16', 'Bonus', 'Total']
         table_data = [col_headers]
         for rank, row in enumerate(rows, 1):
-            emp_id, name, rounds_json, r1, r2, r3, r4, bonus, total = row
+            emp_id, name, rounds_json, r1, r2, r3, r4, r5, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
-            rounds_str = '+'.join([f'R{r}' if r != 4 else 'R32' for r in sorted(rounds)])
+            rounds_str = '+'.join(['R32' if r==4 else 'R16' if r==5 else f'R{r}' for r in sorted(rounds)])
             display_name = ar(name)
             table_data.append([
                 str(rank), str(emp_id), display_name, rounds_str,
                 str(int(r1)), str(int(r2)), str(int(r3)),
-                str(int(r4)), str(int(bonus)), str(int(total))
+                str(int(r4)), str(int(r5)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [8*mm, 16*mm, 58*mm, 22*mm, 12*mm, 12*mm, 12*mm, 12*mm, 14*mm, 14*mm]
+        col_widths = [7*mm, 14*mm, 52*mm, 19*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 12*mm, 12*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
@@ -819,8 +819,8 @@ def export_pdf(_=Depends(require_admin)):
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('TOPPADDING', (0,0), (-1,-1), 4),
             ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('BACKGROUND', (9,1), (9,-1), peach),
-            ('FONTNAME',   (9,1), (9,-1), 'Helvetica-Bold'),
+            ('BACKGROUND', (10,1), (10,-1), peach),
+            ('FONTNAME',   (10,1), (10,-1), 'Helvetica-Bold'),
         ]
         if len(table_data) > 1: style_cmds.append(('BACKGROUND', (0,1), (-1,1), gold))
         if len(table_data) > 2: style_cmds.append(('BACKGROUND', (0,2), (-1,2), silver))
