@@ -109,7 +109,6 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
   <div class="stats-strip" id="stats-strip"></div>
   <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-red" onclick="recalcPoints()">🔄 إعادة حساب النقاط</button>
-    <button class="btn" style="background:#00838F;color:#fff" onclick="addRound6()" id="r6-btn">➕ إضافة دور الـ8</button>
     <button class="btn btn-green" onclick="exportFile('excel')">📊 تصدير Excel</button>
     <button class="btn btn-gray" onclick="exportFile('pdf')">📄 تصدير PDF</button>
     <span id="recalc-msg" style="font-size:13px;color:var(--green);align-self:center"></span>
@@ -420,21 +419,6 @@ async function exportFile(type) {
 
 
 
-async function addRound6() {
-  const btn = document.getElementById('r6-btn');
-  if (!confirm('هل تريد إضافة بيانات دور الـ8؟')) return;
-  btn.disabled = true; btn.textContent = '⏳ جاري الإضافة...';
-  const res = await fetch(API + '/api/admin/add-round6', { method:'POST', headers: authHeaders() });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('✅ تم إضافة دور الـ8: ' + JSON.stringify(data.stats));
-    btn.textContent = '✅ تم إضافة دور الـ8';
-    setTimeout(loadAll, 3000);
-  } else {
-    showToast('خطأ: ' + (data.detail || 'فشلت العملية'), true);
-    btn.disabled = false; btn.textContent = '➕ إضافة دور الـ8';
-  }
-}
 </script>
 </body>
 </html>

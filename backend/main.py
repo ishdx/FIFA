@@ -682,7 +682,7 @@ def export_excel(_=Depends(require_admin)):
             return Border(left=s, right=s, top=s, bottom=s)
 
         headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'R16 Points', 'R8 Points', 'Bonus Points', 'Total']
-        widths  = [4, 12, 28, 10, 9, 9, 9, 9, 9, 9, 11, 9]
+        widths  = [5, 14, 35, 20, 10, 10, 10, 10, 10, 10, 12, 10]
 
         # Header row
         for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -800,7 +800,7 @@ def export_pdf(_=Depends(require_admin)):
                 str(int(r4)), str(int(r5)), str(int(r6)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [6*mm, 12*mm, 52*mm, 26*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 11*mm, 10*mm]
+        col_widths = [7*mm, 14*mm, 58*mm, 30*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 12*mm, 12*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
@@ -819,7 +819,7 @@ def export_pdf(_=Depends(require_admin)):
             ('FONTNAME',   (2,1), (2,-1), 'Amiri'),   # Arabic font for names
             ('FONTSIZE',   (2,1), (2,-1), 9),
             ('ALIGN',      (2,1), (2,-1), 'RIGHT'),   # RTL alignment for names
-            ('FONTSIZE',   (0,1), (-1,-1), 7),
+            ('FONTSIZE',   (0,1), (-1,-1), 7.5),
             ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light]),
             ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#CCCCCC')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
