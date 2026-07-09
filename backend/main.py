@@ -658,7 +658,7 @@ def export_excel(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.r6_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -682,7 +682,7 @@ def export_excel(_=Depends(require_admin)):
             return Border(left=s, right=s, top=s, bottom=s)
 
         headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'R16 Points', 'R8 Points', 'Bonus Points', 'Total']
-        widths  = [5, 14, 35, 20, 10, 10, 10, 10, 10, 10, 12, 10]
+        widths  = [4, 13, 36, 22, 10, 10, 10, 10, 10, 10, 12, 10]
 
         # Header row
         for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -770,8 +770,8 @@ def export_pdf(_=Depends(require_admin)):
 
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                                rightMargin=15*mm, leftMargin=15*mm,
-                                topMargin=15*mm, bottomMargin=15*mm)
+                                rightMargin=10*mm, leftMargin=10*mm,
+                                topMargin=12*mm, bottomMargin=12*mm)
 
         title_style = ParagraphStyle('title', fontSize=14, fontName='Helvetica-Bold',
                                      textColor=colors.HexColor('#1A1A1A'), spaceAfter=2,
@@ -800,7 +800,7 @@ def export_pdf(_=Depends(require_admin)):
                 str(int(r4)), str(int(r5)), str(int(r6)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [7*mm, 14*mm, 58*mm, 30*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 12*mm, 12*mm]
+        col_widths = [7*mm, 15*mm, 65*mm, 32*mm, 11*mm, 11*mm, 11*mm, 11*mm, 11*mm, 11*mm, 13*mm, 13*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
