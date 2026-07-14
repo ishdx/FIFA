@@ -653,7 +653,8 @@ def recalculate_points(_=Depends(require_admin)):
             recalc_all_points(conn)
         finally:
             conn.close()
-        return {"status": "ok", "message": "Points recalculated successfully"} {"status": "ok", "message": "Points recalculated for all participants"}
+        return {"status": "ok", "message": "Points recalculated successfully"}
+
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, str(e))
