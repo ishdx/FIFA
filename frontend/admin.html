@@ -109,6 +109,7 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
   <div class="stats-strip" id="stats-strip"></div>
   <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-red" onclick="recalcPoints()">🔄 إعادة حساب النقاط</button>
+    <button class="btn" style="background:#6A1B9A;color:#fff" onclick="addRound7()" id="r7-btn">➕ إضافة دور الـ4</button>
     <button class="btn btn-green" onclick="exportFile('excel')">📊 تصدير Excel</button>
     <button class="btn btn-gray" onclick="exportFile('pdf')">📄 تصدير PDF</button>
     <span id="recalc-msg" style="font-size:13px;color:var(--green);align-self:center"></span>
@@ -128,6 +129,7 @@ body{background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,
       <button onclick="filterMatches('4',this)">دور الـ32</button>
       <button onclick="filterMatches('5',this)">د16</button>
       <button onclick="filterMatches('6',this)">د8</button>
+      <button onclick="filterMatches('7',this)">د4</button>
       <button onclick="filterMatches('done',this)">مكتملة ✅</button>
       <button onclick="filterMatches('pending',this)">منتظرة ⏳</button>
     </div>
@@ -243,7 +245,7 @@ function renderMatches(filter) {
   let data = allMatchesData;
   if (filter === 'done') data = data.filter(m => m.status === 'done');
   else if (filter === 'pending') data = data.filter(m => m.status === 'pending');
-  else if (['1','2','3','4','5','6'].includes(filter)) data = data.filter(m => String(m.round) === filter);
+  else if (['1','2','3','4','5','6','7'].includes(filter)) data = data.filter(m => String(m.round) === filter);
 
   const tbody = document.getElementById('all-matches-body');
   tbody.innerHTML = data.map(m => {
@@ -259,7 +261,7 @@ function renderMatches(filter) {
       <option value="">— اختر النتيجة —</option>${opts}
     </select>`;
     return `<tr>
-      <td style="text-align:center;font-weight:600">${m.round === 4 ? 'د32' : m.round === 5 ? 'د16' : m.round === 6 ? 'د8' : m.round}</td>
+      <td style="text-align:center;font-weight:600">${m.round === 4 ? 'د32' : m.round === 5 ? 'د16' : m.round === 6 ? 'د8' : m.round === 7 ? 'د4' : m.round}</td>
       <td style="font-size:13px">${m.match_name}</td>
       <td>${sel}</td>
       <td style="text-align:center">${badge}</td>
@@ -304,7 +306,7 @@ async function searchParticipant() {
   const res = await fetch(API + `/api/admin/participant/${emp_id}`, { headers: authHeaders() });
   const p = await res.json();
   const rows = p.predictions.map(pr => `<tr>
-    <td>${pr.round===4?'د32':pr.round===5?'د16':pr.round===6?'د8':'ج'+pr.round}</td>
+    <td>${pr.round===4?'د32':pr.round===5?'د16':pr.round===6?'د8':pr.round===7?'د4':'ج'+pr.round}</td>
     <td style="font-size:12px">${pr.match}</td>
     <td style="font-size:12px">${pr.prediction||'—'}</td>
     <td style="font-size:12px">${pr.result||'—'}</td>
@@ -419,6 +421,22 @@ async function exportFile(type) {
 
 
 
+
+async function addRound7() {
+  const btn = document.getElementById('r7-btn');
+  if (!confirm('هل تريد إضافة بيانات دور الـ4 (نصف النهائي)؟')) return;
+  btn.disabled = true; btn.textContent = '⏳ جاري الإضافة...';
+  const res = await fetch(API + '/api/admin/add-round7', { method:'POST', headers: authHeaders() });
+  const data = await res.json();
+  if (res.ok) {
+    showToast('✅ تم إضافة دور الـ4: ' + JSON.stringify(data.stats));
+    btn.textContent = '✅ تم إضافة دور الـ4';
+    setTimeout(loadAll, 3000);
+  } else {
+    showToast('خطأ: ' + (data.detail || 'فشلت العملية'), true);
+    btn.disabled = false; btn.textContent = '➕ إضافة دور الـ4';
+  }
+}
 </script>
 </body>
 </html>

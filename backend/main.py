@@ -110,22 +110,23 @@ def recalc_all_points(conn):
         emp_id = row[0]
         preds = safe_run(conn,
             "SELECT round, match_name, prediction FROM predictions WHERE emp_id=%s", emp_id)
-        pts = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0}
+        pts = {1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0}
         for pr in preds:
             key = (pr[0], pr[1])
             if key in results and pr[2] and check_pred(pr[2], results[key]):
                 pts[pr[0]] += 3.0
         bonus_row = safe_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=%s", emp_id)
         bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
-        total = pts[1] + pts[2] + pts[3] + pts[4] + pts[5] + pts[6] + bonus_pts
-        safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,r4_pts,r5_pts,r6_pts,bonus_pts,total)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        total = pts[1] + pts[2] + pts[3] + pts[4] + pts[5] + pts[6] + pts[7] + bonus_pts
+        safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,r4_pts,r5_pts,r6_pts,r7_pts,bonus_pts,total)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (emp_id) DO UPDATE SET
                     r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
                     r3_pts=EXCLUDED.r3_pts, r4_pts=EXCLUDED.r4_pts,
                     r5_pts=EXCLUDED.r5_pts, r6_pts=EXCLUDED.r6_pts,
+                    r7_pts=EXCLUDED.r7_pts,
                     total=EXCLUDED.total""",
-                 emp_id, pts[1], pts[2], pts[3], pts[4], pts[5], pts[6], bonus_pts, total)
+                 emp_id, pts[1], pts[2], pts[3], pts[4], pts[5], pts[6], pts[7], bonus_pts, total)
 
 # ── DB init ───────────────────────────────────────────────
 def init_db(conn):
@@ -252,6 +253,7 @@ def get_stats():
         r4c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=4") or [[0]])[0][0]
         r5c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=5") or [[0]])[0][0]
         r6c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=6") or [[0]])[0][0]
+        r7c     = (safe_run(conn, "SELECT COUNT(DISTINCT emp_id) FROM predictions WHERE round=7") or [[0]])[0][0]
         # Count participants who participated in ALL rounds (R1+R2+R3+R32)
         max_rounds = (safe_run(conn, "SELECT COUNT(DISTINCT round) FROM predictions") or [[4]])[0][0]
         all3    = (safe_run(conn, f"SELECT COUNT(*) FROM (SELECT emp_id FROM predictions GROUP BY emp_id HAVING COUNT(DISTINCT round)={max_rounds}) x") or [[0]])[0][0]
@@ -315,6 +317,8 @@ def get_stats():
                 "avg_r5":round(float((safe_run(conn,"SELECT AVG(COALESCE(r5_pts,0)) FROM points_cache WHERE emp_id IN (SELECT DISTINCT emp_id FROM predictions WHERE round=5)") or [[0]])[0][0] or 0),1),
                 "r6_participants":r6c,
                 "avg_r6":round(float((safe_run(conn,"SELECT AVG(COALESCE(r6_pts,0)) FROM points_cache WHERE emp_id IN (SELECT DISTINCT emp_id FROM predictions WHERE round=6)") or [[0]])[0][0] or 0),1),
+                "r7_participants":r7c,
+                "avg_r7":round(float((safe_run(conn,"SELECT AVG(COALESCE(r7_pts,0)) FROM points_cache WHERE emp_id IN (SELECT DISTINCT emp_id FROM predictions WHERE round=7)") or [[0]])[0][0] or 0),1),
                 "combos":combos,"dist_labels":bl,"dist_values":dist}
     finally:
         conn.close()
@@ -324,7 +328,7 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
     conn = get_conn()
     try:
         rows = db_run(conn, """SELECT pc.emp_id,p.name,pc.r1_pts,pc.r2_pts,pc.r3_pts,
-                           COALESCE(pc.r4_pts,0),COALESCE(pc.r5_pts,0),COALESCE(pc.r6_pts,0),COALESCE(pc.bonus_pts,0),pc.total,p.rounds
+                           COALESCE(pc.r4_pts,0),COALESCE(pc.r5_pts,0),COALESCE(pc.r6_pts,0),COALESCE(pc.r7_pts,0),COALESCE(pc.bonus_pts,0),pc.total,p.rounds
                            FROM points_cache pc JOIN participants p ON pc.emp_id=p.emp_id
                            ORDER BY pc.total DESC, p.name ASC""")
         # First pass: assign global rank to all rows
@@ -337,19 +341,20 @@ def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter:
         # Second pass: filter and return with global rank preserved
         results = []
         for global_rank, r in all_rows:
-            rounds = json.loads(r[10])
+            rounds = json.loads(r[11])
             if round_filter=="r1" and 1 not in rounds: continue
             if round_filter=="r2" and 2 not in rounds: continue
             if round_filter=="r3" and 3 not in rounds: continue
             if round_filter=="r4" and 4 not in rounds: continue
             if round_filter=="r5" and 5 not in rounds: continue
             if round_filter=="r6" and 6 not in rounds: continue
+            if round_filter=="r7" and 7 not in rounds: continue
             if round_filter=="all3" and not all(x in rounds for x in [1,2,3]): continue
             if search and search.lower() not in r[1].lower() and search not in r[0]: continue
             results.append({"rank":global_rank,"emp_id":r[0],"name":r[1],
                             "r1":float(r[2]),"r2":float(r[3]),"r3":float(r[4]),
-                            "r4":float(r[5]),"r5":float(r[6]),"r6":float(r[7]),"bonus":float(r[8]),"total":float(r[9]),
-                            "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds,"p4":4 in rounds,"p5":5 in rounds,"p6":6 in rounds})
+                            "r4":float(r[5]),"r5":float(r[6]),"r6":float(r[7]),"r7":float(r[8]),"bonus":float(r[9]),"total":float(r[10]),
+                            "p1":1 in rounds,"p2":2 in rounds,"p3":3 in rounds,"p4":4 in rounds,"p5":5 in rounds,"p6":6 in rounds,"p7":7 in rounds})
         start=(page-1)*per_page
         return {"data":results[start:start+per_page],"total":len(results),"page":page,"per_page":per_page}
     finally:
@@ -658,7 +663,7 @@ def export_excel(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.r6_pts,0), COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.r6_pts,0), COALESCE(pc.r7_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -681,8 +686,8 @@ def export_excel(_=Depends(require_admin)):
             s = Side(style='thin', color='FFCCCCCC')
             return Border(left=s, right=s, top=s, bottom=s)
 
-        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'R16 Points', 'R8 Points', 'Bonus Points', 'Total']
-        widths  = [4, 13, 36, 22, 10, 10, 10, 10, 10, 10, 12, 10]
+        headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'R16 Points', 'R8 Points', 'SF Points', 'Bonus Points', 'Total']
+        widths  = [4, 12, 32, 20, 9, 9, 9, 9, 9, 9, 9, 11, 9]
 
         # Header row
         for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -696,11 +701,11 @@ def export_excel(_=Depends(require_admin)):
 
         # Data rows
         for rank, row in enumerate(rows, 1):
-            emp_id, name, rounds_json, r1, r2, r3, r4, r5, r6, bonus, total = row
+            emp_id, name, rounds_json, r1, r2, r3, r4, r5, r6, r7, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
-            rounds_str = '+'.join(['R32' if r==4 else 'R16' if r==5 else 'R8' if r==6 else f'R{r}' for r in sorted(rounds)])
+            rounds_str = '+'.join(['R32' if r==4 else 'R16' if r==5 else 'R8' if r==6 else 'SF' if r==7 else f'R{r}' for r in sorted(rounds)])
             er = rank + 1
-            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(r4), float(r5), float(r6), float(bonus), float(total)]
+            data = [rank, emp_id, name, rounds_str, float(r1), float(r2), float(r3), float(r4), float(r5), float(r6), float(r7), float(bonus), float(total)]
             medal = {1:'FFD700', 2:'C0C0C0', 3:'CD7F32'}
             for ci, val in enumerate(data, 1):
                 c = ws.cell(row=er, column=ci, value=val)
@@ -759,7 +764,7 @@ def export_pdf(_=Depends(require_admin)):
             rows = db_run(conn, """
                 SELECT pc.emp_id, p.name, p.rounds,
                        pc.r1_pts, pc.r2_pts, pc.r3_pts,
-                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.r6_pts,0), COALESCE(pc.bonus_pts,0), pc.total
+                       COALESCE(pc.r4_pts,0), COALESCE(pc.r5_pts,0), COALESCE(pc.r6_pts,0), COALESCE(pc.r7_pts,0), COALESCE(pc.bonus_pts,0), pc.total
                 FROM points_cache pc
                 JOIN participants p ON pc.emp_id=p.emp_id
                 ORDER BY pc.total DESC, p.name ASC
@@ -787,20 +792,20 @@ def export_pdf(_=Depends(require_admin)):
             sub_style))
         elements.append(Spacer(1, 3*mm))
 
-        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'R32', 'R16', 'R8', 'Bonus', 'Total']
+        col_headers = ['#', 'Emp ID', 'Name', 'Rounds', 'R1', 'R2', 'R3', 'R32', 'R16', 'R8', 'SF', 'Bonus', 'Total']
         table_data = [col_headers]
         for rank, row in enumerate(rows, 1):
-            emp_id, name, rounds_json, r1, r2, r3, r4, r5, r6, bonus, total = row
+            emp_id, name, rounds_json, r1, r2, r3, r4, r5, r6, r7, bonus, total = row
             rounds = json.loads(rounds_json) if rounds_json else []
-            rounds_str = '+'.join(['R32' if r==4 else 'R16' if r==5 else 'R8' if r==6 else f'R{r}' for r in sorted(rounds)])
+            rounds_str = '+'.join(['R32' if r==4 else 'R16' if r==5 else 'R8' if r==6 else 'SF' if r==7 else f'R{r}' for r in sorted(rounds)])
             display_name = ar(name)
             table_data.append([
                 str(rank), str(emp_id), display_name, rounds_str,
                 str(int(r1)), str(int(r2)), str(int(r3)),
-                str(int(r4)), str(int(r5)), str(int(r6)), str(int(bonus)), str(int(total))
+                str(int(r4)), str(int(r5)), str(int(r6)), str(int(r7)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [7*mm, 15*mm, 65*mm, 32*mm, 11*mm, 11*mm, 11*mm, 11*mm, 11*mm, 11*mm, 13*mm, 13*mm]
+        col_widths = [6*mm, 13*mm, 58*mm, 28*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 12*mm, 12*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
@@ -825,8 +830,8 @@ def export_pdf(_=Depends(require_admin)):
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('TOPPADDING', (0,0), (-1,-1), 4),
             ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('BACKGROUND', (11,1), (11,-1), peach),
-            ('FONTNAME',   (11,1), (11,-1), 'Helvetica-Bold'),
+            ('BACKGROUND', (12,1), (12,-1), peach),
+            ('FONTNAME',   (12,1), (12,-1), 'Helvetica-Bold'),
         ]
         if len(table_data) > 1: style_cmds.append(('BACKGROUND', (0,1), (-1,1), gold))
         if len(table_data) > 2: style_cmds.append(('BACKGROUND', (0,2), (-1,2), silver))
@@ -1072,6 +1077,60 @@ def add_round6(_=Depends(require_admin)):
                 safe_run(conn, "INSERT INTO matches (round,match_name,status,options) VALUES (6,%s,'pending',%s) ON CONFLICT DO NOTHING", mn, json.dumps(r6["options"].get(mn,[]), ensure_ascii=False))
                 stats["matches_added"] += 1
         safe_run(conn, "UPDATE points_cache SET total=COALESCE(r1_pts,0)+COALESCE(r2_pts,0)+COALESCE(r3_pts,0)+COALESCE(r4_pts,0)+COALESCE(r5_pts,0)+COALESCE(r6_pts,0)+COALESCE(bonus_pts,0)")
+        return {"status": "ok", "stats": stats}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/admin/check-r7")
+def check_r7(_=Depends(require_admin)):
+    seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "r7_data.json")
+    conn = get_conn()
+    try:
+        r7_matches = (db_run(conn, "SELECT COUNT(*) FROM matches WHERE round=7") or [[0]])[0][0]
+        r7_preds   = (db_run(conn, "SELECT COUNT(*) FROM predictions WHERE round=7") or [[0]])[0][0]
+        return {"file_exists": os.path.exists(seed_path), "r7_matches_in_db": r7_matches, "r7_predictions_in_db": r7_preds}
+    finally:
+        conn.close()
+
+@app.post("/api/admin/add-round7")
+def add_round7(_=Depends(require_admin)):
+    """Add Semi Finals (Round 4 / دور الـ4) — internally round 7."""
+    seed_path = os.path.join(os.path.dirname(__file__), "..", "data", "r7_data.json")
+    if not os.path.exists(seed_path):
+        raise HTTPException(404, "r7_data.json not found")
+    with open(seed_path, encoding="utf-8") as f:
+        r7 = json.load(f)
+    conn = get_conn()
+    try:
+        stats = {"new_participants": 0, "rounds_updated": 0, "predictions_added": 0, "matches_added": 0}
+        try: conn.run("ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS r7_pts REAL DEFAULT 0")
+        except Exception: pass
+        existing_rows = safe_run(conn, "SELECT emp_id, rounds FROM participants") or []
+        existing = {r[0]: json.loads(r[1]) for r in existing_rows}
+        for eid, info in r7["participants"].items():
+            if eid not in existing:
+                safe_run(conn, "INSERT INTO participants (emp_id,name,rounds) VALUES (%s,%s,'[7]') ON CONFLICT DO NOTHING", eid, info["name"])
+                safe_run(conn, "INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total) VALUES (%s,0,0,0,0,0) ON CONFLICT DO NOTHING", eid)
+                stats["new_participants"] += 1
+            elif 7 not in existing[eid]:
+                safe_run(conn, "UPDATE participants SET rounds=%s WHERE emp_id=%s", json.dumps(sorted(existing[eid]+[7])), eid)
+                stats["rounds_updated"] += 1
+        existing_preds = set((r[0],r[1]) for r in (safe_run(conn,"SELECT emp_id,match_name FROM predictions WHERE round=7") or []))
+        for eid, info in r7["participants"].items():
+            for mn, pv in info["predictions"].items():
+                if (eid, mn) not in existing_preds:
+                    safe_run(conn, "INSERT INTO predictions (emp_id,round,match_name,prediction) VALUES (%s,7,%s,%s) ON CONFLICT DO NOTHING", eid, mn, pv or "")
+                    stats["predictions_added"] += 1
+        existing_matches = set(r[0] for r in (safe_run(conn,"SELECT match_name FROM matches WHERE round=7") or []))
+        for mn in r7["matches"]:
+            if mn not in existing_matches:
+                safe_run(conn, "INSERT INTO matches (round,match_name,status,options) VALUES (7,%s,'pending',%s) ON CONFLICT DO NOTHING", mn, json.dumps(r7["options"].get(mn,[]), ensure_ascii=False))
+                stats["matches_added"] += 1
+        safe_run(conn, "UPDATE points_cache SET total=COALESCE(r1_pts,0)+COALESCE(r2_pts,0)+COALESCE(r3_pts,0)+COALESCE(r4_pts,0)+COALESCE(r5_pts,0)+COALESCE(r6_pts,0)+COALESCE(r7_pts,0)+COALESCE(bonus_pts,0)")
         return {"status": "ok", "stats": stats}
     except Exception as e:
         traceback.print_exc()
