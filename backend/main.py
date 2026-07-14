@@ -813,7 +813,7 @@ def export_pdf(_=Depends(require_admin)):
                 str(int(r4)), str(int(r5)), str(int(r6)), str(int(r7)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [6*mm, 13*mm, 55*mm, 27*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 11*mm, 11*mm]
+        col_widths = [6*mm, 13*mm, 60*mm, 36*mm, 8*mm, 8*mm, 8*mm, 8*mm, 8*mm, 8*mm, 8*mm, 10*mm, 10*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
@@ -832,7 +832,7 @@ def export_pdf(_=Depends(require_admin)):
             ('FONTNAME',   (2,1), (2,-1), 'Amiri'),   # Arabic font for names
             ('FONTSIZE',   (2,1), (2,-1), 9),
             ('ALIGN',      (2,1), (2,-1), 'RIGHT'),   # RTL alignment for names
-            ('FONTSIZE',   (0,1), (-1,-1), 7.5),
+            ('FONTSIZE',   (0,1), (-1,-1), 7),
             ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light]),
             ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#CCCCCC')),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
