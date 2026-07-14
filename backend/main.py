@@ -102,6 +102,10 @@ def check_pred(prediction: str, result: str) -> bool:
     return p_en == r_en
 
 def recalc_all_points(conn):
+    # Ensure all round columns exist
+    for col in ['r4_pts','r5_pts','r6_pts','r7_pts']:
+        try: conn.run(f"ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS {col} REAL DEFAULT 0")
+        except Exception: pass
     results_rows = safe_run(conn,
         "SELECT round, match_name, result FROM matches WHERE status='done' AND result IS NOT NULL")
     results = {(r[0], r[1]): r[2] for r in results_rows}
@@ -327,6 +331,10 @@ def get_stats():
 def get_leaderboard(page: int=1, per_page: int=20, search: str="", round_filter: str="all"):
     conn = get_conn()
     try:
+        # Ensure all round point columns exist
+        for col in ['r4_pts','r5_pts','r6_pts','r7_pts']:
+            try: conn.run(f"ALTER TABLE points_cache ADD COLUMN IF NOT EXISTS {col} REAL DEFAULT 0")
+            except Exception: pass
         rows = db_run(conn, """SELECT pc.emp_id,p.name,pc.r1_pts,pc.r2_pts,pc.r3_pts,
                            COALESCE(pc.r4_pts,0),COALESCE(pc.r5_pts,0),COALESCE(pc.r6_pts,0),COALESCE(pc.r7_pts,0),COALESCE(pc.bonus_pts,0),pc.total,p.rounds
                            FROM points_cache pc JOIN participants p ON pc.emp_id=p.emp_id
@@ -687,7 +695,7 @@ def export_excel(_=Depends(require_admin)):
             return Border(left=s, right=s, top=s, bottom=s)
 
         headers = ['#', 'Employee ID', 'Name', 'Rounds', 'R1 Points', 'R2 Points', 'R3 Points', 'R32 Points', 'R16 Points', 'R8 Points', 'SF Points', 'Bonus Points', 'Total']
-        widths  = [4, 12, 32, 20, 9, 9, 9, 9, 9, 9, 9, 11, 9]
+        widths  = [4, 12, 30, 18, 9, 9, 9, 9, 9, 9, 9, 11, 9]
 
         # Header row
         for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -805,7 +813,7 @@ def export_pdf(_=Depends(require_admin)):
                 str(int(r4)), str(int(r5)), str(int(r6)), str(int(r7)), str(int(bonus)), str(int(total))
             ])
 
-        col_widths = [6*mm, 13*mm, 58*mm, 28*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 10*mm, 12*mm, 12*mm]
+        col_widths = [6*mm, 13*mm, 55*mm, 27*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 9*mm, 11*mm, 11*mm]
         t = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         gold   = colors.HexColor('#FFD700')
