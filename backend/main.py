@@ -591,12 +591,16 @@ def merge_participant(payload: dict, _=Depends(require_admin)):
         # Recalculate points for correct_id using full recalc
         recalc_all_points(conn)
 
+        # Get new total for response
+        pts_row = db_run(conn, "SELECT total FROM points_cache WHERE emp_id=%s", correct_id)
+        new_total = float(pts_row[0][0]) if pts_row else 0.0
+
         return {
             "status": "ok",
             "merged": f"{wrong_id} ({wrong_name}) → {correct_id} ({correct_name})",
             "predictions_moved": moved,
             "rounds": merged,
-            "new_total_pts": total
+            "new_total_pts": new_total
         }
     finally:
         conn.close()
