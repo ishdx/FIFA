@@ -588,24 +588,8 @@ def merge_participant(payload: dict, _=Depends(require_admin)):
         db_run(conn, "DELETE FROM points_cache WHERE emp_id=%s", wrong_id)
         db_run(conn, "DELETE FROM participants  WHERE emp_id=%s", wrong_id)
 
-        # Recalculate points for correct_id only
-        preds = db_run(conn, "SELECT round,match_name,prediction FROM predictions WHERE emp_id=%s", correct_id)
-        results_rows = db_run(conn, "SELECT round,match_name,result FROM matches WHERE status='done' AND result IS NOT NULL")
-        results = {(r[0],r[1]): r[2] for r in results_rows}
-        pts = {1:0.0, 2:0.0, 3:0.0}
-        for pr in preds:
-            key = (pr[0], pr[1])
-            if key in results and pr[2] and check_pred(pr[2], results[key]):
-                pts[pr[0]] += 3.0
-        bonus_row = db_run(conn, "SELECT bonus_pts FROM points_cache WHERE emp_id=%s", correct_id)
-        bonus_pts = float(bonus_row[0][0]) if bonus_row else 0.0
-        total = pts[1] + pts[2] + pts[3] + bonus_pts
-        safe_run(conn, """INSERT INTO points_cache (emp_id,r1_pts,r2_pts,r3_pts,bonus_pts,total)
-            VALUES (%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (emp_id) DO UPDATE SET
-            r1_pts=EXCLUDED.r1_pts, r2_pts=EXCLUDED.r2_pts,
-            r3_pts=EXCLUDED.r3_pts, total=EXCLUDED.total""",
-            correct_id, pts[1], pts[2], pts[3], bonus_pts, total)
+        # Recalculate points for correct_id using full recalc
+        recalc_all_points(conn)
 
         return {
             "status": "ok",
